@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "520106931267",
+    "project_id": "ai-expense-logger",
+    "storage_bucket": "ai-expense-logger.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:520106931267:android:c344859ffa2ab3b0dbd0f6",
+        "android_client_info": {
+          "package_name": "com.example.ai_expense_logger"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD7FmATWFAGEW1XX60tDiIX5Ua_PNF-o6o"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
