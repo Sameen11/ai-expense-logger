@@ -1,5 +1,4 @@
 
-import 'package:ai_expense_logger/features/home/home_view.dart';
 import 'package:ai_expense_logger/features/language/language_view.dart';
 import 'package:ai_expense_logger/features/onboarding/onboarding_view.dart';
 import 'package:go_router/go_router.dart';
@@ -40,10 +39,6 @@ class AppRouter {
       GoRoute(
         path: onboarding,
         builder: (context, state) => const OnboardingScreen(),
-      ),
-      GoRoute(
-        path: home,
-        builder: (context, state) => const HomeScreen(),
       ),
     ],
   );

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../home/home_view.dart';
+import '../home/dashboard.dart';
 import 'login_screen.dart';
 import 'provider/auth_provider.dart';
 
@@ -18,7 +18,7 @@ class AuthWrapper extends StatelessWidget {
       builder: (context, authProvider, child) {
         // If user is authenticated, show the HomeScreen.
         if (authProvider.isAuthenticated) {
-          return const HomeScreen();
+          return const DashboardScreen();
         }
         // Otherwise, show the LoginScreen.
         else {
