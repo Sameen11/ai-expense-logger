@@ -1,55 +1,54 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../expenses/model.dart';
+import '../processing_receipt/processing_receipt.dart';
 
+// This class now has a Scaffold and AppBar
 class AddExpenseManuallyScreen extends StatefulWidget {
-  const AddExpenseManuallyScreen({super.key, this.expense});
+  // The extracted data is optional
+  final (String, double, String)? extractedData;
 
-  // Allow passing an expense to edit it
-  final Expense? expense;
+  const AddExpenseManuallyScreen({
+    super.key,
+    this.extractedData,
+  });
 
   @override
-  State<AddExpenseManuallyScreen> createState() => _AddExpenseManuallyScreenState();
+  State<AddExpenseManuallyScreen> createState() =>
+      _AddExpenseManuallyScreenState();
 }
 
 class _AddExpenseManuallyScreenState extends State<AddExpenseManuallyScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _merchantController = TextEditingController();
+  final _amountController = TextEditingController();
+  final _dateController = TextEditingController();
+  final _categoryController = TextEditingController();
+  final _notesController = TextEditingController();
 
-  // Form controllers
-  late TextEditingController _merchantController;
-  late TextEditingController _amountController;
-  late TextEditingController _notesController;
   DateTime _selectedDate = DateTime.now();
-  String _selectedCategory = 'Meals & Dining'; // Default category
-  String _selectedPayment = 'Credit Card'; // Default payment
-
-  // Mock data for dropdowns
-  final List<String> _categories = [
-    'Meals & Dining',
-    'Travel',
-    'Software',
-    'Entertainment',
-    'Shopping',
-    'Other'
-  ];
-  final List<String> _paymentMethods = ['Credit Card', 'Debit Card', 'Cash', 'Bank Transfer'];
 
   @override
   void initState() {
     super.initState();
-    // Initialize controllers with expense data if we are editing
-    _merchantController = TextEditingController(text: widget.expense?.merchant);
-    _amountController = TextEditingController(text: widget.expense?.amount.toString());
-    _notesController = TextEditingController(text: widget.expense?.notes);
-    _selectedDate = widget.expense?.date ?? DateTime.now();
-    _selectedCategory = widget.expense?.category ?? _categories.first;
-    // Payment method isn't in our model, so we'll just use a default
+
+    // Pre-fill fields if data was passed
+    if (widget.extractedData != null) {
+      final (merchant, amount, category) = widget.extractedData!;
+      _merchantController.text = merchant;
+      _amountController.text = amount.toStringAsFixed(2);
+      _categoryController.text = category;
+    }
+
+    _dateController.text = DateFormat('MMM dd, yyyy').format(_selectedDate);
   }
 
   @override
   void dispose() {
+    // Clean up controllers
     _merchantController.dispose();
     _amountController.dispose();
+    _dateController.dispose();
+    _categoryController.dispose();
     _notesController.dispose();
     super.dispose();
   }
@@ -65,70 +64,43 @@ class _AddExpenseManuallyScreenState extends State<AddExpenseManuallyScreen> {
     if (picked != null && picked != _selectedDate) {
       setState(() {
         _selectedDate = picked;
+        _dateController.text = DateFormat('MMM dd, yyyy').format(_selectedDate);
       });
-    }
-  }
-
-  // Function to handle form submission
-  void _submitForm() {
-    if (_formKey.currentState!.validate()) {
-      // Form is valid, create or update the expense
-      final newExpense = Expense(
-        id: widget.expense?.id ?? UniqueKey().toString(), // Use existing ID or new one
-        merchant: _merchantController.text,
-        amount: double.tryParse(_amountController.text) ?? 0.0,
-        date: _selectedDate,
-        category: _selectedCategory,
-        icon: _getIconForCategory(_selectedCategory),
-        notes: _notesController.text,
-      );
-
-      // Here you would save the expense to your database (Firebase, etc.)
-
-      // For now, just pop the screen
-      Navigator.pop(context);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-              widget.expense == null ? 'Expense added!' : 'Expense updated!'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    }
-  }
-
-  // Helper to get an icon based on category
-  IconData _getIconForCategory(String category) {
-    switch (category) {
-      case 'Meals & Dining': return Icons.coffee;
-      case 'Travel': return Icons.directions_car;
-      case 'Software': return Icons.laptop_chromebook;
-      case 'Entertainment': return Icons.movie;
-      case 'Shopping': return Icons.shopping_bag;
-      default: return Icons.receipt_long;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // *** THE FIX IS HERE: We've added a Scaffold ***
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.grey[100],
-        elevation: 0,
+        // An AppBar is helpful for a full screen
+        title: Text(
+          widget.extractedData != null
+              ? 'Review Expense'
+              : 'Add Expense Manually',
+          style: TextStyle(
+            color: Colors.grey[900],
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        backgroundColor: Colors.white,
+        elevation: 1,
+        // Provides a back button
         leading: IconButton(
           icon: Icon(Icons.close, color: Colors.grey[800]),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(
-          widget.expense == null ? 'Add Expense' : 'Edit Expense',
-          style: TextStyle(color: Colors.grey[900], fontWeight: FontWeight.bold),
-        ),
-        centerTitle: true,
         actions: [
+          // A "Save" button
           TextButton(
-            onPressed: _submitForm,
+            onPressed: () {
+              if (_formKey.currentState!.validate()) {
+                // Handle save logic
+                Navigator.pop(context); // Close the screen
+              }
+            },
             child: Text(
               'Save',
               style: TextStyle(
@@ -140,160 +112,93 @@ class _AddExpenseManuallyScreenState extends State<AddExpenseManuallyScreen> {
           ),
         ],
       ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16.0),
-          children: [
-            // Using the same "Settings Group" style for consistency
-            _buildFormCard(
+      // The body is now the root Container from before
+      body: Container(
+        padding: const EdgeInsets.all(24.0),
+        color: Colors.white,
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                TextFormField(
+                _buildTextFormField(
                   controller: _merchantController,
-                  decoration: const InputDecoration(
-                    labelText: 'Merchant',
-                    border: InputBorder.none,
-                    prefixIcon: Icon(Icons.storefront),
-                  ),
+                  label: 'Merchant',
+                  icon: Icons.storefront_outlined,
                   validator: (value) =>
-                  value == null || value.isEmpty ? 'Please enter a merchant' : null,
+                  value == null || value.isEmpty ? 'Enter a merchant' : null,
                 ),
-                _buildDivider(),
-                TextFormField(
+                const SizedBox(height: 16),
+                _buildTextFormField(
                   controller: _amountController,
-                  decoration: const InputDecoration(
-                    labelText: 'Amount',
-                    border: InputBorder.none,
-                    prefixIcon: Icon(Icons.attach_money),
-                  ),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) return 'Please enter an amount';
-                    if (double.tryParse(value) == null) return 'Please enter a valid number';
-                    return null;
-                  },
+                  label: 'Amount',
+                  icon: Icons.attach_money,
+                  keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+                  validator: (value) =>
+                  value == null || value.isEmpty ? 'Enter an amount' : null,
                 ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            _buildFormCard(
-              children: [
-                _buildDropdownField(
+                const SizedBox(height: 16),
+                _buildTextFormField(
+                  controller: _dateController,
+                  label: 'Date',
+                  icon: Icons.calendar_today_outlined,
+                  readOnly: true,
+                  onTap: () => _selectDate(context),
+                ),
+                const SizedBox(height: 16),
+                _buildTextFormField(
+                  controller: _categoryController,
                   label: 'Category',
-                  icon: Icons.category,
-                  value: _selectedCategory,
-                  items: _categories,
-                  onChanged: (newValue) {
-                    setState(() {
-                      _selectedCategory = newValue!;
-                    });
-                  },
+                  icon: Icons.category_outlined,
+                  validator: (value) =>
+                  value == null || value.isEmpty ? 'Select a category' : null,
                 ),
-                _buildDivider(),
-                _buildDateField(context),
-                _buildDivider(),
-                _buildDropdownField(
-                  label: 'Payment',
-                  icon: Icons.credit_card,
-                  value: _selectedPayment,
-                  items: _paymentMethods,
-                  onChanged: (newValue) {
-                    setState(() {
-                      _selectedPayment = newValue!;
-                    });
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            _buildFormCard(
-              children: [
-                TextFormField(
+                const SizedBox(height: 16),
+                _buildTextFormField(
                   controller: _notesController,
-                  decoration: const InputDecoration(
-                    labelText: 'Notes (optional)',
-                    border: InputBorder.none,
-                    prefixIcon: Icon(Icons.note_alt),
-                  ),
-                  maxLines: 3,
+                  label: 'Notes (Optional)',
+                  icon: Icons.notes_outlined,
                 ),
+                const SizedBox(height: 32),
               ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  // Reusable card for form sections
-  Widget _buildFormCard({required List<Widget> children}) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      child: Column(children: children),
-    );
-  }
-
-  // Reusable divider
-  Widget _buildDivider() => Divider(height: 1, color: Colors.grey[200], indent: 56);
-
-  // Reusable widget for dropdowns
-  Widget _buildDropdownField({
+  // Helper widget to build styled TextFormFields
+  Widget _buildTextFormField({
+    required TextEditingController controller,
     required String label,
     required IconData icon,
-    required String value,
-    required List<String> items,
-    required ValueChanged<String?> onChanged,
+    bool readOnly = false,
+    TextInputType? keyboardType,
+    VoidCallback? onTap,
+    String? Function(String?)? validator,
   }) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 16, right: 16, top: 4, bottom: 4),
-      child: Row(
-        children: [
-          Icon(icon, color: Colors.grey[600]),
-          const SizedBox(width: 15),
-          Expanded(
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                isExpanded: true,
-                value: value,
-                icon: Icon(Icons.arrow_drop_down, color: Colors.grey[600]),
-                items: items.map((String item) {
-                  return DropdownMenuItem<String>(
-                    value: item,
-                    child: Text(item, style: const TextStyle(fontSize: 16)),
-                  );
-                }).toList(),
-                onChanged: onChanged,
-                hint: Text(label),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Reusable widget for the date field
-  Widget _buildDateField(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => _selectDate(context),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Row(
-            children: [
-              Icon(Icons.calendar_today, color: Colors.grey[600]),
-              const SizedBox(width: 15),
-              Expanded(
-                child: Text(
-                  DateFormat('MMM dd, yyyy').format(_selectedDate),
-                  style: const TextStyle(fontSize: 16),
-                ),
-              ),
-              Icon(Icons.arrow_drop_down, color: Colors.grey[600]),
-            ],
-          ),
+    return TextFormField(
+      controller: controller,
+      readOnly: readOnly,
+      keyboardType: keyboardType,
+      onTap: onTap,
+      validator: validator,
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(color: Colors.grey[700]),
+        prefixIcon: Icon(icon, color: Colors.grey[600]),
+        filled: true,
+        fillColor: Colors.grey[100],
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12.0),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12.0),
+          borderSide: BorderSide(color: Colors.blue[700]!, width: 2),
         ),
       ),
     );

@@ -71,7 +71,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                 const Icon(Icons.shopping_bag_outlined, size: 120, color: Colors.white),
                 const SizedBox(height: 24),
                 const Text(
-                  'Shopix',
+                  'Expense Logger',
+                  textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 2.0),
                 ),
                 const SizedBox(height: 80),

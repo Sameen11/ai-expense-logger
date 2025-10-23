@@ -1,5 +1,8 @@
+import 'package:ai_expense_logger/core/app_routes.dart';
 import 'package:ai_expense_logger/features/authentication/provider/auth_provider.dart';
+import 'package:ai_expense_logger/features/upgrade/premium_view.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 class SettingsView extends StatelessWidget {
@@ -297,6 +300,12 @@ class _AccountPlanCard extends StatelessWidget {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => PremiumScreen(),
+                      ),
+                    );
                     // Handle Upgrade to Pro
                   },
                   style: ElevatedButton.styleFrom(

@@ -24,18 +24,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final List<OnboardingPageModel> _pages = [
     OnboardingPageModel(
       imagePath: 'assets/images/undraw_product_tour.svg',
-      title: 'Discover Amazing Products',
-      subtitle: 'Browse through thousands of products from the best brands.',
+      title: 'Snap → Categorize → Done',
+      subtitle: 'Track expenses in seconds with AI-powered receipt scanning.',
     ),
     OnboardingPageModel(
       imagePath: 'assets/images/undraw_shopping_app.svg',
-      title: 'Add to Cart with Ease',
-      subtitle: 'Select your favorite items and add them to your cart effortlessly.',
+      title: 'AI Auto-Categorizes Everything',
+      subtitle: 'No manual sorting. Our AI recognizes merchants and categories automatically.',
     ),
     OnboardingPageModel(
       imagePath: 'assets/images/undraw_order_confirmed.svg',
-      title: 'Fast & Secure Checkout',
-      subtitle: 'Complete your purchase with our streamlined and secure payment process.',
+      title: 'Export for Taxes, No Hassle',
+      subtitle: 'One-tap CSV exports ready for your accountant or tax software.',
     ),
   ];
 
@@ -143,8 +143,8 @@ class NextButton extends StatelessWidget {
         duration: const Duration(milliseconds: 300),
         transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
         child: isLastPage
-            ? const Icon(Icons.check, color: Colors.white, key: ValueKey('check_icon'))
-            : const Icon(Icons.arrow_forward, color: Colors.white, key: ValueKey('arrow_icon')),
+            ? const Icon(Icons.check, size: 30, color: Colors.white, key: ValueKey('check_icon'))
+            : const Icon(Icons.arrow_forward, size: 30, color: Colors.white, key: ValueKey('arrow_icon')),
       ),
     );
   }

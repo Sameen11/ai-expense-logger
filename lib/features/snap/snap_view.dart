@@ -1,8 +1,9 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import '../processing_receipt/processing_receipt.dart';
 import 'add_expense.dart';
-
 // A global variable to hold all available cameras
 List<CameraDescription> cameras = [];
 
@@ -13,14 +14,42 @@ class SnapView extends StatefulWidget {
   State<SnapView> createState() => _SnapViewState();
 }
 
-class _SnapViewState extends State<SnapView> {
+class _SnapViewState extends State<SnapView> with WidgetsBindingObserver {
   CameraController? _controller;
   Future<void>? _initializeControllerFuture;
+  bool _isShutterPressed = false; // State for shutter animation
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initializeCamera();
+  }
+
+  // *** UPDATED: Handle app lifecycle changes robustly ***
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
+      // App is backgrounded or hidden.
+      // Dispose the controller to release the camera hardware completely.
+      if (_controller != null) {
+        _controller!.dispose();
+        _controller = null;
+        _initializeControllerFuture = null;
+        // Set state to show loading spinner when we come back
+        if (mounted) {
+          setState(() {});
+        }
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      // App is foregrounded.
+      // Re-initialize the camera if it's not already initializing.
+      if (_controller == null && _initializeControllerFuture == null) {
+        _initializeCamera(); // This will set the future and call setState
+      }
+    }
   }
 
   Future<void> _initializeCamera() async {
@@ -34,9 +63,11 @@ class _SnapViewState extends State<SnapView> {
       if (cameras.isNotEmpty) {
         final firstCamera = cameras.first;
 
+        // Cleaned up: No need to dispose here, lifecycle handles it
         _controller = CameraController(
           firstCamera,
-          ResolutionPreset.high, // Use a high resolution
+          // *** OPTIMIZATION: Use 'medium' for much faster preview startup ***
+          ResolutionPreset.medium,
           enableAudio: false, // We don't need audio for receipts
         );
 
@@ -67,163 +98,196 @@ class _SnapViewState extends State<SnapView> {
 
   @override
   void dispose() {
-    // Dispose of the controller when the widget is disposed.
-    _controller?.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    _controller?.dispose(); // Dispose one last time
     super.dispose();
   }
 
   void _onTakePicturePressed() async {
-    try {
-      // Ensure that the camera is initialized.
-      await _initializeControllerFuture;
+    // ... (This function remains the same as before)
+    if (_controller == null || !_controller!.value.isInitialized) return;
 
-      // Attempt to take a picture and get the file `XFile` where it was saved.
+    setState(() {
+      _isShutterPressed = true;
+    });
+
+    try {
+      await _initializeControllerFuture;
       final image = await _controller!.takePicture();
 
-      // If the picture was taken, you can navigate to a preview screen
-      // or start the OCR process.
-      // For now, let's just show a snackbar.
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Picture saved to ${image.path}')),
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProcessingReceiptScreen(imagePath: image.path),
+          ),
         );
-        // Example navigation:
-        // Navigator.push(context, MaterialPageRoute(
-        //   builder: (context) => PreviewScreen(imagePath: image.path),
-        // ));
       }
     } catch (e) {
-      // If an error occurs, log the error to the console.
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error taking picture: $e')),
         );
       }
     }
+
+    // We might not come back here, but reset if we do
+    if (mounted) {
+      setState(() {
+        _isShutterPressed = false;
+      });
+    }
   }
 
-  void _onManualEntryPressed() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const AddExpenseManuallyScreen(),
+  void _onManualEntryPressed() async {
+    // ... (This function remains the same as before)
+    HapticFeedback.lightImpact();
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.85,
+        maxChildSize: 0.85,
+        minChildSize: 0.5,
+        builder: (context, scrollController) {
+          return ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            child: AddExpenseManuallyScreen(),
+          );
+        },
       ),
     );
   }
 
+  void _toggleFlash() {
+    // ... (This function remains the same as before)
+    HapticFeedback.lightImpact();
+    if (_controller == null || !_controller!.value.isInitialized) return;
+
+    final bool isFlashOn = _controller!.value.flashMode == FlashMode.torch;
+    _controller!.setFlashMode(isFlashOn ? FlashMode.off : FlashMode.torch);
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Determine the flash icon
+    final IconData flashIcon = _controller?.value.flashMode == FlashMode.torch
+        ? Icons.flash_on
+        : Icons.flash_off_outlined;
+
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          // Camera Preview
-          FutureBuilder<void>(
-            future: _initializeControllerFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.done) {
-                // If the Future is complete, display the preview.
-                if (_controller == null || !_controller!.value.isInitialized) {
-                  return const Center(child: Text('Error: Camera not initialized.'));
-                }
-                // Use CameraPreview to display the camera feed.
-                return Center(
-                  child: CameraPreview(_controller!),
-                );
-              } else {
-                // Otherwise, display a loading indicator.
-                return const Center(child: CircularProgressIndicator(color: Colors.white));
-              }
-            },
-          ),
-
-          // UI Overlay
-          Column(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      backgroundColor: Colors.black54,
+      body: SafeArea(
+        child: AnimatedOpacity(
+          opacity: 1.0, // Always show the UI
+          duration: const Duration(milliseconds: 300),
+          child: Column(
             children: [
-              // Top Bar (for safety area, could be an AppBar)
-              Container(
-                height: MediaQuery.of(context).padding.top,
-                color: Colors.black.withOpacity(0.3),
-              ),
+              // 1. Top Bar
+              _buildTopBar(context, flashIcon),
 
-              // Bottom Control Bar
-              Container(
-                height: 140,
-                color: Colors.black.withOpacity(0.3),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    // Manual Entry Button
-                    InkWell(
-                      onTap: _onManualEntryPressed,
-                      borderRadius: BorderRadius.circular(30),
-                      child: const Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.edit_note, color: Colors.white, size: 28),
-                          SizedBox(height: 4),
-                          Text(
-                            'Manual Entry',
-                            style: TextStyle(color: Colors.white, fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ),
+              // 2. Viewfinder (The Camera Preview)
+              _buildViewfinder(context),
 
-                    // Shutter Button
-                    InkWell(
-                      onTap: _onTakePicturePressed,
-                      child: Container(
-                        width: 70,
-                        height: 70,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white,
-                          border: Border.all(color: Colors.white, width: 4),
-                        ),
-                        child: Container(
-                          margin: const EdgeInsets.all(3),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.black, width: 2),
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    // Gallery/Flash (Placeholder)
-                    InkWell(
-                      onTap: () {
-                        // Toggle flash or open gallery
-                        bool isFlashOn = _controller?.value.flashMode == FlashMode.torch;
-                        _controller?.setFlashMode(isFlashOn ? FlashMode.off : FlashMode.torch);
-                        setState(() {}); // Update UI
-                      },
-                      borderRadius: BorderRadius.circular(30),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                              _controller?.value.flashMode == FlashMode.torch
-                                  ? Icons.flash_on
-                                  : Icons.flash_off,
-                              color: Colors.white,
-                              size: 28
-                          ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            'Flash',
-                            style: TextStyle(color: Colors.white, fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              // 3. Bottom Bar
+              _buildBottomBar(context),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopBar(BuildContext context, IconData flashIcon) {
+    // ... (This function remains the same as before)
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          IconButton(
+            icon: Icon(flashIcon),
+            color: Colors.white,
+            iconSize: 32,
+            onPressed: _toggleFlash,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildViewfinder(BuildContext context) {
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24.0),
+          // *** UPDATED: FutureBuilder now correctly handles re-initialization ***
+          child: FutureBuilder<void>(
+            future: _initializeControllerFuture,
+            builder: (context, snapshot) {
+              // If the future is null (disposed) or waiting, show loading
+              if (snapshot.connectionState != ConnectionState.done || _controller == null || !_controller!.value.isInitialized) {
+                return const Center(
+                    child: CircularProgressIndicator(color: Colors.white));
+              }
+
+              // When done, show the preview
+              return CameraPreview(_controller!);
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomBar(BuildContext context) {
+    // ... (This function remains the same as before)
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 32.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.edit_note_outlined),
+            color: Colors.white,
+            iconSize: 32,
+            onPressed: _onManualEntryPressed,
+          ),
+          InkWell(
+            onTapDown: (_) {
+              HapticFeedback.lightImpact();
+              setState(() => _isShutterPressed = true);
+            },
+            onTapUp: (_) => _onTakePicturePressed(),
+            onTapCancel: () => setState(() => _isShutterPressed = false),
+            borderRadius: BorderRadius.circular(40),
+            child: Container(
+              width: 74,
+              height: 74,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                    color: Colors.white.withOpacity(0.7), width: 3),
+              ),
+              child: Center(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 100),
+                  width: _isShutterPressed ? 58 : 62,
+                  height: _isShutterPressed ? 58 : 62,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 48),
         ],
       ),
     );
