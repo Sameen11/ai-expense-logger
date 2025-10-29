@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 
+import 'core/sizer.dart';
 import 'features/authentication/provider/auth_provider.dart';
 import 'features/authentication/service/auth_service.dart';
 import 'features/splash/splash.dart';
@@ -41,33 +42,37 @@ class MyApp extends StatelessWidget {
           create: (context) => AuthProvider(context.read<AuthService>()),
         ),
       ],
-      child: MaterialApp(
-        title: 'AI Expense Logger',
-        theme: ThemeData(
-          primarySwatch: Colors.blue,
-          visualDensity: VisualDensity.adaptivePlatformDensity,
-          fontFamily: 'Poppins',
-          scaffoldBackgroundColor: Colors.white,
-
-          // This creates a consistent, modern style for all text fields in the app.
-          inputDecorationTheme: InputDecorationTheme(
-            filled: true,
-            fillColor: Colors.grey[200],
-            contentPadding: const EdgeInsets.symmetric(vertical: 15.0, horizontal: 20.0),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12.0),
-              borderSide: BorderSide.none,
+      child: Sizer(
+          builder: (context, orientation, deviceType) {
+          return MaterialApp(
+            title: 'AI Expense Logger',
+            theme: ThemeData(
+              primarySwatch: Colors.blue,
+              primaryColor: Colors.blue,
+              visualDensity: VisualDensity.adaptivePlatformDensity,
+              fontFamily: 'Poppins',
+              scaffoldBackgroundColor: Colors.white,
+              // This creates a consistent, modern style for all text fields in the app.
+              inputDecorationTheme: InputDecorationTheme(
+                filled: true,
+                fillColor: Colors.grey[200],
+                contentPadding: const EdgeInsets.symmetric(vertical: 15.0, horizontal: 20.0),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12.0),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12.0),
+                  borderSide: const BorderSide(color: Colors.blue, width: 2),
+                ),
+                labelStyle: TextStyle(color: Colors.grey[600]),
+              ),
             ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12.0),
-              borderSide: const BorderSide(color: Colors.blue, width: 2),
-            ),
-            labelStyle: TextStyle(color: Colors.grey[600]),
-          ),
-        ),
-        debugShowCheckedModeBanner: false,
-        // The app's journey starts with the SplashScreen.
-        home: const SplashScreen(),
+            debugShowCheckedModeBanner: false,
+            // The app's journey starts with the SplashScreen.
+            home: const SplashScreen(),
+          );
+        }
       ),
     );
   }

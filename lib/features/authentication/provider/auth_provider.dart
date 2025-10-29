@@ -73,8 +73,39 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
+  /// Updates the user's profile.
+  Future<void> updateUserProfile({
+    required String newName,
+    required String newEmail,
+    String? newPhoneNumber, // --- ADDED newPhoneNumber ---
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      // 1. Call the service to perform the update
+      await _authService.updateUserProfile(
+        newName: newName,
+        newEmail: newEmail,
+        newPhoneNumber: newPhoneNumber, // --- PASS THE PHONE NUMBER ---
+      );
+
+      // 2. Manually update the local user object
+      //    The authStateChanges stream might not fire for profile updates,
+      //    so we get the new user data from the service.
+      _user = _authService.currentUser;
+    } catch (e) {
+      _errorMessage = e.toString();
+      throw e; // Re-throw so the UI can catch it (e.g., for error messages)
+    } finally {
+      _isLoading = false;
+      notifyListeners(); // Notifies UI of loading stop AND the new _user data
+    }
+  }
+
   // Method to clear error messages, useful for the UI.
   void clearError() {
     _errorMessage = null;
   }
 }
+

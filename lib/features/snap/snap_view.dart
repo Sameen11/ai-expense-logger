@@ -1,9 +1,12 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
+import '../../navigation/nav_manager.dart';
+import '../../services/file_pick_service.dart';
 import '../processing_receipt/processing_receipt.dart';
 import 'add_expense.dart';
+import 'widget/file_picker_sheet.dart';
+
 // A global variable to hold all available cameras
 List<CameraDescription> cameras = [];
 
@@ -19,6 +22,9 @@ class _SnapViewState extends State<SnapView> with WidgetsBindingObserver {
   Future<void>? _initializeControllerFuture;
   bool _isShutterPressed = false; // State for shutter animation
 
+  // --- ADDED: Instantiate the service ---
+  final FilePickerService _filePickerService = FilePickerService();
+
   @override
   void initState() {
     super.initState();
@@ -26,7 +32,7 @@ class _SnapViewState extends State<SnapView> with WidgetsBindingObserver {
     _initializeCamera();
   }
 
-  // *** UPDATED: Handle app lifecycle changes robustly ***
+  // ... (didChangeAppLifecycleState remains the same) ...
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
@@ -52,6 +58,7 @@ class _SnapViewState extends State<SnapView> with WidgetsBindingObserver {
     }
   }
 
+  // ... (_initializeCamera remains the same) ...
   Future<void> _initializeCamera() async {
     // 1. Ensure 'cameras' list is populated
     try {
@@ -103,6 +110,7 @@ class _SnapViewState extends State<SnapView> with WidgetsBindingObserver {
     super.dispose();
   }
 
+  // ... (_onTakePicturePressed remains the same) ...
   void _onTakePicturePressed() async {
     // ... (This function remains the same as before)
     if (_controller == null || !_controller!.value.isInitialized) return;
@@ -116,11 +124,10 @@ class _SnapViewState extends State<SnapView> with WidgetsBindingObserver {
       final image = await _controller!.takePicture();
 
       if (mounted) {
-        Navigator.push(
+        NavigationManager.push(
           context,
-          MaterialPageRoute(
-            builder: (context) => ProcessingReceiptScreen(imagePath: image.path),
-          ),
+          ProcessingReceiptScreen(imagePath: image.path),
+          type: TransitionType.slideFromBottom, // A modal slide is nice here
         );
       }
     } catch (e) {
@@ -139,6 +146,7 @@ class _SnapViewState extends State<SnapView> with WidgetsBindingObserver {
     }
   }
 
+  // ... (_onManualEntryPressed remains the same) ...
   void _onManualEntryPressed() async {
     // ... (This function remains the same as before)
     HapticFeedback.lightImpact();
@@ -161,6 +169,7 @@ class _SnapViewState extends State<SnapView> with WidgetsBindingObserver {
     );
   }
 
+  // ... (_toggleFlash remains the same) ...
   void _toggleFlash() {
     // ... (This function remains the same as before)
     HapticFeedback.lightImpact();
@@ -169,6 +178,92 @@ class _SnapViewState extends State<SnapView> with WidgetsBindingObserver {
     final bool isFlashOn = _controller!.value.flashMode == FlashMode.torch;
     _controller!.setFlashMode(isFlashOn ? FlashMode.off : FlashMode.torch);
     setState(() {});
+  }
+
+  // --- UPDATED ---
+  /// Shows the bottom sheet for picking a file or image.
+  void _onFilePickerPressed() async {
+    HapticFeedback.lightImpact();
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return FilePickerBottomSheet(
+          onPickImage: _pickImageFromGallery,
+          onPickFile: _pickFile,
+        );
+      },
+    );
+  }
+
+  // --- UPDATED: Now uses the service ---
+  /// Uses image_picker to select an image from the gallery.
+  Future<void> _pickImageFromGallery() async {
+    // 1. Close the bottom sheet
+    Navigator.of(context).pop();
+
+    try {
+      // Call the service
+      final PickedFileResult? result =
+      await _filePickerService.pickImageFromGallery();
+
+      if (result != null && mounted) {
+        // 2. Navigate to the processing screen with the file path
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) =>
+                ProcessingReceiptScreen(imagePath: result.file.path),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error picking image: $e')),
+        );
+      }
+    }
+  }
+
+  // --- UPDATED: Now uses the service ---
+  /// Uses file_picker to select a PDF.
+  Future<void> _pickFile() async {
+    // 1. Close the bottom sheet
+    Navigator.of(context).pop();
+
+    try {
+      // Call the service
+      final PickedFileResult? result =
+      await _filePickerService.pickPdfFromFile();
+
+      if (result != null && mounted) {
+        // ---
+        // TODO: Handle the PDF file path.
+        // You might have a different processing screen for PDFs.
+        // For now, we'll just show a success message.
+        // ---
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Selected PDF: ${result.name}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        // Example:
+        // Navigator.push(context, MaterialPageRoute(
+        //   builder: (context) => ProcessingPdfScreen(pdfPath: result.file.path),
+        // ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error picking file: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -193,7 +288,7 @@ class _SnapViewState extends State<SnapView> with WidgetsBindingObserver {
               _buildViewfinder(context),
 
               // 3. Bottom Bar
-              _buildBottomBar(context),
+              _buildBottomBar(context), // --- UPDATED ---
             ],
           ),
         ),
@@ -201,6 +296,7 @@ class _SnapViewState extends State<SnapView> with WidgetsBindingObserver {
     );
   }
 
+  // ... (_buildTopBar remains the same) ...
   Widget _buildTopBar(BuildContext context, IconData flashIcon) {
     // ... (This function remains the same as before)
     return Padding(
@@ -219,6 +315,7 @@ class _SnapViewState extends State<SnapView> with WidgetsBindingObserver {
     );
   }
 
+  // ... (_buildViewfinder remains the same) ...
   Widget _buildViewfinder(BuildContext context) {
     return Expanded(
       child: Padding(
@@ -230,7 +327,9 @@ class _SnapViewState extends State<SnapView> with WidgetsBindingObserver {
             future: _initializeControllerFuture,
             builder: (context, snapshot) {
               // If the future is null (disposed) or waiting, show loading
-              if (snapshot.connectionState != ConnectionState.done || _controller == null || !_controller!.value.isInitialized) {
+              if (snapshot.connectionState != ConnectionState.done ||
+                  _controller == null ||
+                  !_controller!.value.isInitialized) {
                 return const Center(
                     child: CircularProgressIndicator(color: Colors.white));
               }
@@ -244,20 +343,23 @@ class _SnapViewState extends State<SnapView> with WidgetsBindingObserver {
     );
   }
 
+  // ... (_buildBottomBar remains the same) ...
   Widget _buildBottomBar(BuildContext context) {
-    // ... (This function remains the same as before)
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 32.0),
+      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        // Use spaceBetween to position the three items evenly
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          // 1. Manual Entry Button
           IconButton(
             icon: const Icon(Icons.edit_note_outlined),
             color: Colors.white,
             iconSize: 32,
             onPressed: _onManualEntryPressed,
           ),
+          // 2. Shutter Button
           InkWell(
             onTapDown: (_) {
               HapticFeedback.lightImpact();
@@ -287,7 +389,13 @@ class _SnapViewState extends State<SnapView> with WidgetsBindingObserver {
               ),
             ),
           ),
-          const SizedBox(width: 48),
+          // 3. File Picker Button (replaces the SizedBox)
+          IconButton(
+            icon: const Icon(Icons.attach_file_outlined),
+            color: Colors.white,
+            iconSize: 32,
+            onPressed: _onFilePickerPressed,
+          ),
         ],
       ),
     );

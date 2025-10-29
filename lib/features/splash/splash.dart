@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'package:ai_expense_logger/features/language/language_view.dart';
 import 'package:flutter/material.dart';
+import '../../navigation/nav_manager.dart';
 import '../onboarding/onboarding_view.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -32,14 +34,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     // For now, we always go to onboarding first.
     Timer(const Duration(seconds: 4), () {
       if (mounted) {
-        Navigator.of(context).pushReplacement(
-            PageRouteBuilder(
-              pageBuilder: (context, animation, secondaryAnimation) => const OnboardingScreen(),
-              transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                return FadeTransition(opacity: animation, child: child);
-              },
-              transitionDuration: const Duration(milliseconds: 800),
-            )
+        NavigationManager.pushReplacement(
+          context,
+          LanguageView(), // The new page you want to show
+          type: TransitionType.slideFromRight, // Specify the transition
         );
       }
     });

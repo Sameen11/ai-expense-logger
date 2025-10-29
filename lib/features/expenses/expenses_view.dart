@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../navigation/nav_manager.dart';
 import 'expense_detail.dart';
 import 'model.dart';
 import 'package:intl/intl.dart';
@@ -287,11 +288,10 @@ class _ExpenseListItem extends StatelessWidget {
         ),
         onTap: () {
           // Navigate to the Expense Detail Screen
-          Navigator.push(
+          NavigationManager.push(
             context,
-            MaterialPageRoute(
-              builder: (context) => ExpenseDetailScreen(expense: expense),
-            ),
+            ExpenseDetailScreen(expense: expense), // The new page
+            type: TransitionType.platform, // The transition you want
           );
         },
       ),

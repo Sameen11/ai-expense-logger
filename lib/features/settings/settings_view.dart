@@ -5,6 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+// --- IMPORT THE NEW PROFILE EDIT SCREEN ---
+import '../profile_edit/profile_edit.dart';
+import '../../navigation/nav_manager.dart'; // Import your NavigationManager
+
 class SettingsView extends StatelessWidget {
   const SettingsView({super.key});
 
@@ -14,6 +18,7 @@ class SettingsView extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.grey[100], // Lighter grey background
       appBar: AppBar(
+        surfaceTintColor: Colors.transparent,
         title: const Text(
           'Settings',
           style: TextStyle(
@@ -107,7 +112,7 @@ class SettingsView extends StatelessWidget {
               children: [
                 _SettingsOption(
                   title: 'Version 1.0.0',
-                  showArrow: true,
+                  showArrow: true, // Changed to true for consistency
                   onTap: () {
                     // Handle version tap
                   },
@@ -201,13 +206,14 @@ class _UserProfileSection extends StatelessWidget {
   Widget build(BuildContext context) {
     // Use auth provider to get user info (if available)
     final authProvider = context.watch<AuthProvider>();
+    // Use the provider's user object, which updates on notifyListeners()
     final user = authProvider.user;
 
     String email = user?.email ?? 'john@example.com';
     String name = user?.displayName ?? 'John Doe';
-    String initials = (name.isNotEmpty)
-        ? name.trim().split(' ').map((l) => l[0]).take(2).join()
-        : 'JD';
+    String initials = (name.isNotEmpty && name != 'John Doe')
+        ? name.trim().split(' ').map((l) => l[0]).take(2).join().toUpperCase()
+        : (user?.email?.isNotEmpty == true ? user!.email![0].toUpperCase() : '??');
 
     return ListTile(
       leading: CircleAvatar(
@@ -237,7 +243,16 @@ class _UserProfileSection extends StatelessWidget {
       ),
       trailing: const Icon(Icons.chevron_right, color: Colors.grey),
       onTap: () {
-        // Navigate to Profile Edit Screen
+        // --- THIS IS THE NAVIGATION LOGIC ---
+        // We use the current name and email to pre-fill the form
+        NavigationManager.push(
+          context,
+          ProfileEditView(
+            currentName: name,
+            currentEmail: email,
+          ),
+          type: TransitionType.slideFromRight, // Use your modern transition
+        );
       },
     );
   }
@@ -300,13 +315,12 @@ class _AccountPlanCard extends StatelessWidget {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
-                    Navigator.push(
+                    // Use your NavigationManager for consistency
+                    NavigationManager.push(
                       context,
-                      MaterialPageRoute(
-                        builder: (context) => PremiumScreen(),
-                      ),
+                      PremiumScreen(),
+                      type: TransitionType.slideFromBottom, // A modal slide is nice here
                     );
-                    // Handle Upgrade to Pro
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blue,
@@ -440,4 +454,3 @@ class _SignOutTile extends StatelessWidget {
     );
   }
 }
-

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../../navigation/nav_manager.dart';
 import '../authentication/auth_wrapper.dart'; // Import the AuthWrapper
 
 // Data Model (no changes)
@@ -23,17 +24,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   final List<OnboardingPageModel> _pages = [
     OnboardingPageModel(
-      imagePath: 'assets/images/undraw_product_tour.svg',
+      imagePath: 'assets/pngs/ob_1.png',
       title: 'Snap → Categorize → Done',
       subtitle: 'Track expenses in seconds with AI-powered receipt scanning.',
     ),
     OnboardingPageModel(
-      imagePath: 'assets/images/undraw_shopping_app.svg',
+      imagePath: 'assets/pngs/ob_2.png',
       title: 'AI Auto-Categorizes Everything',
       subtitle: 'No manual sorting. Our AI recognizes merchants and categories automatically.',
     ),
     OnboardingPageModel(
-      imagePath: 'assets/images/undraw_order_confirmed.svg',
+      imagePath: 'assets/pngs/ob_3.png',
       title: 'Export for Taxes, No Hassle',
       subtitle: 'One-tap CSV exports ready for your accountant or tax software.',
     ),
@@ -57,7 +58,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   // When onboarding is finished or skipped, navigate to the AuthWrapper.
   // The AuthWrapper will then decide whether to show the Login screen or Home screen.
   void _finishOnboarding() {
-    Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const AuthWrapper()));
+    NavigationManager.pushReplacement(
+      context,
+      AuthWrapper(), // The new page you want to show
+      type: TransitionType.slideFromRight, // Specify the transition
+    );
   }
 
   @override
@@ -113,7 +118,8 @@ class OnboardingPageContent extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          SvgPicture.asset(page.imagePath, height: 250),
+          // png image
+          Image.asset(page.imagePath, height: 250),
           const SizedBox(height: 50),
           Text(page.title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
           const SizedBox(height: 20),
