@@ -51,13 +51,6 @@ class SettingsView extends StatelessWidget {
                   },
                 ),
                 _SettingsTextValueOption(
-                  title: 'Default Payment Method',
-                  value: 'Not Set',
-                  onTap: () {
-                    // Handle payment method tap
-                  },
-                ),
-                _SettingsTextValueOption(
                   title: 'Manage Categories',
                   value: 'Set',
                   onTap: () {
@@ -69,7 +62,7 @@ class SettingsView extends StatelessWidget {
                     );
                   },
                 ),
-                const _SettingsToggleOption(title: 'Keep Data Local Only'),
+                // const _SettingsToggleOption(title: 'Keep Data Local Only'),
               ],
             ),
             const _SettingsSectionHeader(title: 'EXPORT'),

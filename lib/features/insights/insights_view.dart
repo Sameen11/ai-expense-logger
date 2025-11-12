@@ -1,68 +1,183 @@
 import 'package:ai_expense_logger/common/colors.dart';
+import 'package:ai_expense_logger/providers/category_provider.dart';
+import 'package:ai_expense_logger/providers/expense_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+// --- NEW IMPORT ---
+import 'package:fl_chart/fl_chart.dart';
 
-class InsightsView extends StatelessWidget {
+import 'package:ai_expense_logger/navigation/nav_manager.dart';
+import '../../services/csv_exporter.dart';
+import 'all_categories_screen.dart';
+import 'category_progress_item.dart';
+
+class InsightsView extends StatefulWidget {
   const InsightsView({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.bgColor, // Light background
-      appBar: AppBar(
-        backgroundColor: Colors.grey[100],
-        surfaceTintColor: Colors.transparent, // No shadow
-        elevation: 0,
-        // Title with month selector
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              // Using hardcoded date as per image
-              'September 2025',
-              style: TextStyle(
-                color: Colors.grey[900],
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
+  State<InsightsView> createState() => _InsightsViewState();
+}
+
+class _InsightsViewState extends State<InsightsView> {
+  /// Shows the month picker dialog
+  bool _isExporting = false;
+  Future<void> _selectMonth(
+      BuildContext context, ExpenseProvider provider) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: provider.selectedMonth,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2101),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: AppColors.primaryColor, // Header background
+              onPrimary: Colors.white, // Header text
+              onSurface: Color(0xFF1D1D1F), // Calendar text
+            ),
+            dialogBackgroundColor: Colors.white,
+
+            // *** THE FIX IS HERE ***
+            // It's 'DialogThemeData', not 'DialogTheme'
+            dialogTheme: DialogThemeData(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16.0),
               ),
             ),
-            Icon(Icons.arrow_drop_down, color: Colors.grey[800]),
-          ],
-        ),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: Icon(Icons.download_outlined, color: Colors.grey[800]),
-            onPressed: () {
-              // Handle download action
-            },
+
+            // *** I've also corrected this for you ***
+            // It's 'TextButtonThemeData', not 'TextButtonTheme'
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF4A90E2), // OK/Cancel button color
+              ),
+            ),
           ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 1. Total Spending Card
-            _buildTotalSpendingCard(),
-            const SizedBox(height: 24),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null && picked != provider.selectedMonth) {
+      provider.updateSelectedMonth(picked);
+    }
+  }
 
-            // 2. Spending by Category Card
-            _buildSpendingByCategoryCard(),
-            const SizedBox(height: 24),
+  // --- NEW FUNCTION to handle the export logic ---
+  Future<void> _handleExport(ExpenseProvider provider) async {
+    setState(() { _isExporting = true; });
 
-            // 3. Summary Card
-            _buildSummaryCard(),
-          ],
+    try {
+      final expenses = provider.expensesForSelectedMonth;
+      if (expenses.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No data to export for this month.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      final monthName = DateFormat('yyyy-MM').format(provider.selectedMonth);
+
+      // Call our service
+      await CsvExporter().exportExpenses(expenses, monthName);
+
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error exporting file: ${e.toString()}'),
+          backgroundColor: Colors.red,
         ),
-      ),
+      );
+    } finally {
+      // Ensure the loading spinner always stops
+      setState(() { _isExporting = false; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer2<ExpenseProvider, CategoryProvider>(
+      builder: (context, expenseProvider, categoryProvider, child) {
+        final selectedMonth = expenseProvider.selectedMonth;
+        final totalSpent = expenseProvider.totalSpentForSelectedMonth;
+
+        final categorySpending = expenseProvider.spendingByCategory;
+        final sortedCategories = categorySpending.entries.toList()
+          ..sort((a, b) => b.value.compareTo(a.value));
+
+        final dailyAverage = expenseProvider.averageDailySpending;
+        final topMerchant = expenseProvider.topMerchant;
+
+        return Scaffold(
+          backgroundColor: AppColors.bgColor,
+          appBar: AppBar(
+            backgroundColor: Colors.grey[100],
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            title: InkWell(
+              onTap: () => _selectMonth(context, expenseProvider),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    DateFormat('MMMM yyyy').format(selectedMonth),
+                    style: TextStyle(
+                      color: Colors.grey[900],
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                  ),
+                  Icon(Icons.arrow_drop_down, color: Colors.grey[800]),
+                ],
+              ),
+            ),
+            centerTitle: true,
+            actions: [
+              _isExporting
+                  ? const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+                  : IconButton(
+                icon: Icon(Icons.download_outlined, color: Colors.grey[800]),
+                onPressed: () => _handleExport(expenseProvider),
+              ),
+            ],
+          ),
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildTotalSpendingCard(totalSpent),
+                const SizedBox(height: 24),
+                _buildSpendingByCategoryCard(
+                  context,
+                  sortedCategories,
+                  totalSpent,
+                  categoryProvider,
+                  expenseProvider, // <-- Pass expenseProvider for chart data
+                ),
+                const SizedBox(height: 24),
+                _buildSummaryCard(dailyAverage, topMerchant),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
-  // Card for the "Total Spending" section
-  Widget _buildTotalSpendingCard() {
+  Widget _buildTotalSpendingCard(double totalSpent) {
     return Container(
       padding: const EdgeInsets.all(24.0),
       decoration: BoxDecoration(
@@ -81,8 +196,7 @@ class InsightsView extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            // Using hardcoded value from image
-            NumberFormat.currency(symbol: '\$').format(2847.32),
+            NumberFormat.currency(symbol: '\$').format(totalSpent),
             style: const TextStyle(
               color: Colors.white,
               fontSize: 36,
@@ -103,7 +217,7 @@ class InsightsView extends StatelessWidget {
                     Icon(Icons.arrow_upward, color: Colors.white, size: 16),
                     SizedBox(width: 4),
                     Text(
-                      '12%',
+                      '--%',
                       style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
@@ -126,8 +240,20 @@ class InsightsView extends StatelessWidget {
     );
   }
 
-  // Card for the "Spending by Category" section
-  Widget _buildSpendingByCategoryCard() {
+  /// Card for the "Spending by Category" section
+  Widget _buildSpendingByCategoryCard(
+      BuildContext context,
+      List<MapEntry<String, double>> sortedCategories,
+      double totalSpent,
+      CategoryProvider categoryProvider,
+      ExpenseProvider expenseProvider, // <-- NEW parameter
+      ) {
+    final colors = [
+      Colors.blue[600]!,
+      Colors.green[600]!,
+      Colors.purple[600]!,
+    ];
+
     return Container(
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
@@ -146,49 +272,68 @@ class InsightsView extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          // Pie Chart Placeholder
-          Container(
-            height: 150,
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Center(
-              child: Icon(
-                Icons.pie_chart_outline,
-                color: Colors.grey[500],
-                size: 60,
+
+          // --- REPLACED PIE CHART PLACEHOLDER ---
+          if (sortedCategories.isEmpty)
+            Container(
+              height: 150,
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: Text('No spending this month',
+                    style: TextStyle(color: Colors.grey[600])),
+              ),
+            )
+          else
+          // Actual Pie Chart
+            SizedBox(
+              height: 150,
+              child: PieChart(
+                PieChartData(
+                  pieTouchData: PieTouchData(
+                    touchCallback: (FlTouchEvent event, pieTouchResponse) {
+                      // Handle touch events if you want interactive slices
+                    },
+                  ),
+                  borderData: FlBorderData(show: false),
+                  sectionsSpace: 2, // Space between slices
+                  centerSpaceRadius: 40, // Size of the center hole
+                  sections: expenseProvider.pieChartData, // <-- Data from provider
+                ),
               ),
             ),
-          ),
           const SizedBox(height: 24),
-          // Category List
-          _buildCategoryProgressItem(
-            icon: Icons.coffee,
-            title: 'Meals & Dining',
-            amount: 847,
-            percentage: 0.30,
-            color: Colors.blue[600]!,
-          ),
-          _buildCategoryProgressItem(
-            icon: Icons.directions_car,
-            title: 'Travel',
-            amount: 623,
-            percentage: 0.22,
-            color: Colors.green[600]!,
-          ),
-          _buildCategoryProgressItem(
-            icon: Icons.laptop_chromebook,
-            title: 'Software',
-            amount: 412,
-            percentage: 0.14,
-            color: Colors.purple[600]!,
-          ),
+
+          // --- Dynamic Category List (Top 3) ---
+          ...sortedCategories.take(3).toList().asMap().entries.map((indexedEntry) {
+            final index = indexedEntry.key;
+            final categoryName = indexedEntry.value.key;
+            final amount = indexedEntry.value.value;
+            final category = categoryProvider.getCategory(categoryName);
+            final percentage = (totalSpent > 0) ? amount / totalSpent : 0.0;
+
+            return CategoryProgressItem(
+              icon: category.iconData,
+              title: categoryName,
+              amount: amount,
+              percentage: percentage,
+              color: colors[index % colors.length],
+            );
+          }),
           const SizedBox(height: 16),
           Center(
             child: TextButton(
               onPressed: () {
-                // Handle "View All Categories"
+                NavigationManager.push(
+                  context,
+                  AllCategoriesScreen(
+                    sortedCategories: sortedCategories,
+                    totalSpent: totalSpent,
+                  ),
+                  type: TransitionType.platform,
+                );
               },
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -215,78 +360,7 @@ class InsightsView extends StatelessWidget {
     );
   }
 
-  // Reusable widget for each category progress bar item
-  Widget _buildCategoryProgressItem({
-    required IconData icon,
-    required String title,
-    required double amount,
-    required double percentage,
-    required Color color,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Icon(icon, color: Colors.grey[700], size: 20),
-                  const SizedBox(width: 12),
-                  Text(
-                    title,
-                    style: TextStyle(
-                      color: Colors.grey[800],
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
-                    ),
-                  ),
-                ],
-              ),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    // Using hardcoded value from image
-                    '\$${amount.toStringAsFixed(0)}',
-                    style: TextStyle(
-                      color: Colors.grey[900],
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${(percentage * 100).toStringAsFixed(0)}%',
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          // Rounded LinearProgressIndicator
-          ClipRRect(
-            borderRadius: BorderRadius.circular(5.0),
-            child: LinearProgressIndicator(
-              value: percentage,
-              backgroundColor: Colors.grey[200],
-              valueColor: AlwaysStoppedAnimation<Color>(color),
-              minHeight: 10,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Card for the "Summary" section
-  Widget _buildSummaryCard() {
+  Widget _buildSummaryCard(double dailyAverage, String topMerchant) {
     return Container(
       padding: const EdgeInsets.all(24.0),
       decoration: BoxDecoration(
@@ -297,19 +371,18 @@ class InsightsView extends StatelessWidget {
         children: [
           _buildSummaryRow(
             title: 'Average Daily',
-            value: NumberFormat.currency(symbol: '\$').format(94.91),
+            value: NumberFormat.currency(symbol: '\$').format(dailyAverage),
           ),
           const SizedBox(height: 20),
           _buildSummaryRow(
             title: 'Top Merchant',
-            value: 'Starbucks (8x)',
+            value: topMerchant,
           ),
         ],
       ),
     );
   }
 
-  // Reusable row for the summary card
   Widget _buildSummaryRow({required String title, required String value}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -333,4 +406,3 @@ class InsightsView extends StatelessWidget {
     );
   }
 }
-
