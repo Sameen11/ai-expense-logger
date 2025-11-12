@@ -1,3 +1,4 @@
+import 'package:ai_expense_logger/common/colors.dart';
 import 'package:ai_expense_logger/features/authentication/provider/auth_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -96,8 +97,9 @@ class _ProfileEditViewState extends State<ProfileEditView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: AppColors.bgColor,
       appBar: AppBar(
+        backgroundColor: AppColors.bgColor,
         title: const Text(
           'Edit Profile',
           style: TextStyle(
@@ -105,7 +107,6 @@ class _ProfileEditViewState extends State<ProfileEditView> {
             fontWeight: FontWeight.bold,
           ),
         ),
-        backgroundColor: Colors.grey[100],
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black), // Ensure back button is visible
       ),
@@ -193,7 +194,7 @@ class _ProfileEditViewState extends State<ProfileEditView> {
                     width: 24,
                     height: 24,
                     child: CircularProgressIndicator(
-                      color: Colors.white,
+                      color: AppColors.bgColor,
                       strokeWidth: 3,
                     ),
                   )

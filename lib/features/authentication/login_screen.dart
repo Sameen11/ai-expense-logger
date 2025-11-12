@@ -1,3 +1,4 @@
+import 'package:ai_expense_logger/common/colors.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -45,7 +46,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final authProvider = Provider.of<AuthProvider>(context);
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.bgColor,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -56,7 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(Icons.shopping_bag_outlined, size: 80, color: Colors.blue),
+                  const Icon(Icons.shopping_bag_outlined, size: 80, color: AppColors.primaryColor),
                   const SizedBox(height: 20),
                   const Text(
                     'Welcome Back!',
@@ -88,12 +89,12 @@ class _LoginScreenState extends State<LoginScreen> {
                     alignment: Alignment.centerRight,
                     child: TextButton(
                       onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ForgotPasswordScreen())),
-                      child: const Text('Forgot Password?'),
+                      child: const Text('Forgot Password?', style: TextStyle(color: AppColors.primaryColor)),
                     ),
                   ),
                   const SizedBox(height: 20),
                   authProvider.isLoading
-                      ? const Center(child: CircularProgressIndicator())
+                      ? const Center(child: CircularProgressIndicator(color: AppColors.primaryColor))
                       : AuthButton(onPressed: _submit, text: 'Login'),
                   const SizedBox(height: 20),
                   Row(
@@ -101,8 +102,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     children: [
                       const Text("Don't have an account?"),
                       TextButton(
-                        onPressed: () => Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const SignUpScreen())),
-                        child: const Text('Sign Up'),
+                        onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SignUpScreen())),
+                        child: const Text('Sign Up', style: TextStyle(color: AppColors.primaryColor)),
                       ),
                     ],
                   ),

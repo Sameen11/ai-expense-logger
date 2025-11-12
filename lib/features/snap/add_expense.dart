@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../processing_receipt/processing_receipt.dart';
+import 'package:provider/provider.dart';
 
+import '../../providers/expense_provider.dart';
 // This class now has a Scaffold and AppBar
 class AddExpenseManuallyScreen extends StatefulWidget {
   // The extracted data is optional
@@ -53,13 +54,45 @@ class _AddExpenseManuallyScreenState extends State<AddExpenseManuallyScreen> {
     super.dispose();
   }
 
-  // Function to show the date picker
+  //
+  // *** THIS FUNCTION IS THE ONLY PART THAT CHANGED ***
+  //
+  // NEW & CORRECTED
   Future<void> _selectDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
       firstDate: DateTime(2000),
       lastDate: DateTime(2101),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF4A90E2), // Header background
+              onPrimary: Colors.white, // Header text
+              onSurface: Color(0xFF1D1D1F), // Calendar text
+            ),
+            dialogBackgroundColor: Colors.white,
+
+            // *** THE FIX IS HERE ***
+            // It's 'DialogThemeData', not 'DialogTheme'
+            dialogTheme: DialogThemeData(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16.0),
+              ),
+            ),
+
+            // *** I've also corrected this for you ***
+            // It's 'TextButtonThemeData', not 'TextButtonTheme'
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF4A90E2), // OK/Cancel button color
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
     if (picked != null && picked != _selectedDate) {
       setState(() {
@@ -97,8 +130,28 @@ class _AddExpenseManuallyScreenState extends State<AddExpenseManuallyScreen> {
           TextButton(
             onPressed: () {
               if (_formKey.currentState!.validate()) {
-                // Handle save logic
-                Navigator.pop(context); // Close the screen
+                // Get the provider (don't listen, we're in a function)
+                final expenseProvider = context.read<ExpenseProvider>();
+
+                // Parse data from controllers
+                final String merchant = _merchantController.text;
+                final double amount = double.tryParse(_amountController.text) ?? 0.0;
+                final String category = _categoryController.text.trim().toLowerCase();
+                final String notes = _notesController.text;
+
+                // _selectedDate is already a DateTime, perfect!
+
+                // Call the provider to add the expense
+                expenseProvider.addExpense(
+                  merchant: merchant,
+                  amount: amount,
+                  date: _selectedDate,
+                  category: category,
+                  notes: notes.isNotEmpty ? notes : null,
+                );
+
+                // Close the screen
+                Navigator.pop(context);
               }
             },
             child: Text(
@@ -204,4 +257,3 @@ class _AddExpenseManuallyScreenState extends State<AddExpenseManuallyScreen> {
     );
   }
 }
-

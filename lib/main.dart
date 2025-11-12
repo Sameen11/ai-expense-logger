@@ -1,17 +1,22 @@
-import 'package:flutter/material.dart';
+import 'package:ai_expense_logger/common/colors.dart';
+import 'package:ai_expense_logger/providers/expense_provider.dart';
+import 'package:ai_expense_logger/services/shared_pref_service.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'core/sizer.dart';
 import 'features/authentication/provider/auth_provider.dart';
 import 'features/authentication/service/auth_service.dart';
 import 'features/splash/splash.dart';
+import 'providers/category_provider.dart';
 
 // Note: We DO NOT import 'firebase_options.dart' because we are using the manual setup method.
 
 void main() async {
   // 1. Ensure that Flutter's internal bindings are initialized before any plugins.
   WidgetsFlutterBinding.ensureInitialized();
+  await SharedPrefService.init(); // initialize once
 
   // 2. Initialize Firebase. This will automatically use the
   //    google-services.json and GoogleService-Info.plist files you added.
@@ -35,12 +40,27 @@ class MyApp extends StatelessWidget {
           create: (_) => AuthService(),
         ),
 
+
         // ChangeNotifierProvider creates and listens to our AuthProvider.
         // It depends on AuthService, so we read the instance we provided above.
         // It will automatically rebuild dependent widgets when the auth state changes.
         ChangeNotifierProvider<AuthProvider>(
           create: (context) => AuthProvider(context.read<AuthService>()),
         ),
+
+        // This is the magic:
+        // It depends on AuthProvider and rebuilds when AuthProvider changes
+        ChangeNotifierProxyProvider<AuthProvider, ExpenseProvider>(
+          create: (_) => ExpenseProvider(),
+          update: (_, auth, previousExpenses) {
+            // When auth.uid changes (login/logout),
+            // it updates the ExpenseProvider with the new uid
+            previousExpenses!.updateUid(auth.user?.uid);
+            return previousExpenses;
+          },
+        ),
+        // NEW: Add this. It loads once and is available everywhere.
+        ChangeNotifierProvider(create: (_) => CategoryProvider()),
       ],
       child: Sizer(
           builder: (context, orientation, deviceType) {
@@ -48,10 +68,10 @@ class MyApp extends StatelessWidget {
             title: 'AI Expense Logger',
             theme: ThemeData(
               primarySwatch: Colors.blue,
-              primaryColor: Colors.blue,
+              primaryColor: Color(0xFF4A90E2),
               visualDensity: VisualDensity.adaptivePlatformDensity,
               fontFamily: 'Poppins',
-              scaffoldBackgroundColor: Colors.white,
+              scaffoldBackgroundColor: AppColors.bgColor,
               // This creates a consistent, modern style for all text fields in the app.
               inputDecorationTheme: InputDecorationTheme(
                 filled: true,
@@ -63,7 +83,8 @@ class MyApp extends StatelessWidget {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12.0),
-                  borderSide: const BorderSide(color: Colors.blue, width: 2),
+                  borderSide: const BorderSide(
+                      color: AppColors.bgColor, width: 1.5),
                 ),
                 labelStyle: TextStyle(color: Colors.grey[600]),
               ),

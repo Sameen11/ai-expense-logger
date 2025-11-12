@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 
+import '../../common/colors.dart';
 import '../../widgets/auth_button.dart';
 import '../../widgets/custom_text_field.dart';
 import 'login_screen.dart';
@@ -47,7 +48,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     final authProvider = Provider.of<AuthProvider>(context);
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.bgColor,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -58,7 +59,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(Icons.person_add_alt_1_outlined, size: 80, color: Colors.blue),
+                  const Icon(Icons.person_add_alt_1_outlined, size: 80, color: AppColors.primaryColor),
                   const SizedBox(height: 20),
                   const Text(
                     'Create Account',

@@ -1,214 +1,206 @@
 import 'package:flutter/material.dart';
-import '../../navigation/nav_manager.dart';
-import 'expense_detail.dart';
-import 'model.dart';
+import 'package:provider/provider.dart'; // Import Provider
 import 'package:intl/intl.dart';
+
+import '../../common/colors.dart';
+import '../../models/expense.dart';
+import '../../navigation/nav_manager.dart';
+import '../../providers/category_provider.dart';
+import '../../providers/expense_provider.dart';
+import '../snap/add_expense.dart';
+import 'expense_detail.dart';
 
 class ExpensesView extends StatelessWidget {
   const ExpensesView({super.key});
 
-  // Mock data for demonstration
-  static final List<Expense> _expenses = [
-    // Today's expenses
-    Expense(
-      id: 'e1',
-      merchant: 'Starbucks',
-      amount: 15.47,
-      date: DateTime.now(),
-      category: 'Meals & Dining',
-      icon: Icons.coffee,
-      notes: 'Client meeting coffee',
-    ),
-    Expense(
-      id: 'e2',
-      merchant: 'Uber',
-      amount: 23.10,
-      date: DateTime.now(),
-      category: 'Travel',
-      icon: Icons.directions_car,
-    ),
-    // Yesterday's expenses
-    Expense(
-      id: 'e3',
-      merchant: 'Adobe',
-      amount: 9.99,
-      date: DateTime.now().subtract(const Duration(days: 1)),
-      category: 'Software',
-      icon: Icons.laptop_chromebook,
-    ),
-    Expense(
-      id: 'e4',
-      merchant: 'Pizza Hut',
-      amount: 34.50,
-      date: DateTime.now().subtract(const Duration(days: 1)),
-      category: 'Meals & Dining',
-      icon: Icons.local_pizza,
-    ),
-    // Older expenses for scroll demo
-    Expense(
-      id: 'e5',
-      merchant: 'Netflix',
-      amount: 19.99,
-      date: DateTime.now().subtract(const Duration(days: 3)),
-      category: 'Entertainment',
-      icon: Icons.movie,
-    ),
-    Expense(
-      id: 'e6',
-      merchant: 'Amazon',
-      amount: 120.50,
-      date: DateTime.now().subtract(const Duration(days: 4)),
-      category: 'Shopping',
-      icon: Icons.shopping_bag,
-    ),
-  ];
+  // Helper function to check if two DateTime objects are on the same day
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Group expenses for the list (e.g., Today, Yesterday)
-    // In a real app, this logic would be in a ViewModel or Bloc
-    final List<Expense> todayExpenses = _expenses.where((e) => e.date.day == DateTime.now().day).toList();
-    final List<Expense> yesterdayExpenses = _expenses.where((e) => e.date.day == DateTime.now().day - 1).toList();
-    final List<Expense> olderExpenses = _expenses.where((e) => e.date.day < DateTime.now().day - 1).toList();
-
-    const double totalSpent = 2847.32; // Hardcoded total from image
     const Color backgroundColor = Colors.white; // Flat white background
 
-    return Scaffold(
-      backgroundColor: backgroundColor,
-      body: CustomScrollView(
-        slivers: [
-          // This SliverAppBar has a flat, minimal look
-          SliverAppBar(
+    // We wrap the main UI in a Consumer
+    return Consumer<ExpenseProvider>(
+      builder: (context, provider, child) {
+        // --- 1. HANDLE LOADING & ERROR STATES ---
+        if (provider.isLoading) {
+          return const Scaffold(
             backgroundColor: backgroundColor,
-            expandedHeight: 220.0,
-            floating: false,
-            surfaceTintColor: Colors.transparent,
-            pinned: true,
-            elevation: 0, // No shadow
-            iconTheme: IconThemeData(color: Colors.grey[800]), // Darker icons
-            actionsIconTheme: IconThemeData(color: Colors.grey[800]),
-            title: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  DateFormat('MMMM yyyy').format(DateTime.now()), // "September 2025"
-                  style: TextStyle(
-                    color: Colors.grey[800],
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (provider.error != null) {
+          return Scaffold(
+            backgroundColor: backgroundColor,
+            body: Center(child: Text("Error: ${provider.error}")),
+          );
+        }
+
+        // --- 2. PROCESS LIVE DATA ---
+        final allExpenses = provider.expenses;
+
+        final double totalSpent = allExpenses.fold(
+          0.0,
+              (sum, item) => sum + item.amount,
+        );
+
+        final now = DateTime.now();
+        final yesterday = now.subtract(const Duration(days: 1));
+
+        final List<Expense> todayExpenses =
+        allExpenses.where((e) => _isSameDay(e.date, now)).toList();
+        final List<Expense> yesterdayExpenses =
+        allExpenses.where((e) => _isSameDay(e.date, yesterday)).toList();
+        final List<Expense> olderExpenses =
+        allExpenses.where((e) => e.date.isBefore(yesterday) && !_isSameDay(e.date, yesterday)).toList();
+
+        // --- 3. BUILD THE UI ---
+        return Scaffold(
+          backgroundColor: backgroundColor,
+          body: CustomScrollView(
+            slivers: [
+              SliverAppBar(
+                backgroundColor: backgroundColor,
+                expandedHeight: 220.0,
+                floating: false,
+                surfaceTintColor: Colors.transparent,
+                pinned: true,
+                elevation: 0,
+                iconTheme: IconThemeData(color: Colors.grey[800]),
+                actionsIconTheme: IconThemeData(color: Colors.grey[800]),
+                title: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      DateFormat('MMMM yyyy').format(DateTime.now()),
+                      style: TextStyle(
+                        color: Colors.grey[800],
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
+                    Icon(Icons.arrow_drop_down, color: Colors.grey[800]),
+                  ],
+                ),
+                centerTitle: true,
+                actions: [
+                  IconButton(
+                    icon: const Icon(Icons.search, size: 28),
+                    onPressed: () {},
+                  ),
+                ],
+                flexibleSpace: FlexibleSpaceBar(
+                  background: Container(
+                    color: backgroundColor,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: kToolbarHeight),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Total Spent',
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            // <-- UPDATED: Use calculated total
+                            NumberFormat.currency(symbol: '\$').format(totalSpent),
+                            style: TextStyle(
+                              color: Colors.grey[900],
+                              fontSize: 40,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-                Icon(Icons.arrow_drop_down, color: Colors.grey[800]),
-              ],
-            ),
-            centerTitle: true,
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.search, size: 28),
-                onPressed: () {
-                  // Handle search action
-                },
+                bottom: PreferredSize(
+                  preferredSize: const Size.fromHeight(1.0),
+                  child: Container(
+                    color: Colors.grey[200],
+                    height: 1.0,
+                  ),
+                ),
+              ),
+
+              // --- 4. HANDLE EMPTY LIST ---
+              if (allExpenses.isEmpty)
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.all(48.0),
+                    child: Center(
+                      child: Text(
+                        "No expenses yet. Tap '+' to add one!",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 16, color: Colors.grey),
+                      ),
+                    ),
+                  ),
+                ),
+
+              // "TODAY" Header (only if there are expenses)
+              if (todayExpenses.isNotEmpty) _DateHeader(title: 'TODAY'),
+              SliverList(
+                delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                    return _ExpenseListItem(expense: todayExpenses[index]);
+                  },
+                  childCount: todayExpenses.length, // <-- UPDATED
+                ),
+              ),
+
+              // "YESTERDAY" Header (only if there are expenses)
+              if (yesterdayExpenses.isNotEmpty) _DateHeader(title: 'YESTERDAY'),
+              SliverList(
+                delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                    return _ExpenseListItem(expense: yesterdayExpenses[index]);
+                  },
+                  childCount: yesterdayExpenses.length, // <-- UPDATED
+                ),
+              ),
+
+              // "OLDER" Header (only if there are expenses)
+              if (olderExpenses.isNotEmpty) _DateHeader(title: 'OLDER'),
+              SliverList(
+                delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                    return _ExpenseListItem(expense: olderExpenses[index]);
+                  },
+                  childCount: olderExpenses.length, // <-- UPDATED
+                ),
+              ),
+
+              const SliverToBoxAdapter(
+                child: SizedBox(height: 100),
               ),
             ],
-            // The flexible space holds the "Total Spent" section
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                color: backgroundColor,
-                child: Padding(
-                  // Added padding to ensure it's below the status bar
-                  padding: const EdgeInsets.only(top: kToolbarHeight),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Total Spent',
-                        style: TextStyle(
-                          color: Colors.grey[600],
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      // Clean text look for the total
-                      Text(
-                        NumberFormat.currency(symbol: '\$').format(totalSpent),
-                        style: TextStyle(
-                          color: Colors.grey[900],
-                          fontSize: 40,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            // Clean divider at the bottom
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(1.0),
-              child: Container(
-                color: Colors.grey[200],
-                height: 1.0,
-              ),
-            ),
           ),
-
-          // "TODAY" Header
-          _DateHeader(title: 'TODAY'),
-
-          // List of Today's expenses
-          SliverList(
-            delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                return _ExpenseListItem(expense: todayExpenses[index]);
-              },
-              childCount: todayExpenses.length,
-            ),
+          floatingActionButton: FloatingActionButton(
+            onPressed: () {
+              // <-- UPDATED: Navigate to your add screen
+              NavigationManager.push(
+                context,
+                const AddExpenseManuallyScreen(),
+                type: TransitionType.platform, // Modal slide-up is nice here
+              );
+            },
+            backgroundColor: AppColors.primaryColor,
+            elevation: 6,
+            child: const Icon(Icons.add, color: Colors.white, size: 30),
           ),
-
-          // "YESTERDAY" Header
-          _DateHeader(title: 'YESTERDAY'),
-
-          // List of Yesterday's expenses
-          SliverList(
-            delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                return _ExpenseListItem(expense: yesterdayExpenses[index]);
-              },
-              childCount: yesterdayExpenses.length,
-            ),
-          ),
-
-          // "OLDER" Header
-          _DateHeader(title: 'OLDER'),
-
-          // List of Older expenses
-          SliverList(
-            delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                return _ExpenseListItem(expense: olderExpenses[index]);
-              },
-              childCount: olderExpenses.length,
-            ),
-          ),
-
-
-          // Add some padding at the bottom
-          const SliverToBoxAdapter(
-            child: SizedBox(height: 100), // More space for FAB
-          ),
-        ],
-      ),
-      // Standard Floating Action Button
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          // Handle add new expense
-        },
-        backgroundColor: Colors.blue[700],
-        elevation: 6,
-        child: const Icon(Icons.add, color: Colors.white, size: 30),
-      ),
+        );
+      },
     );
   }
 }
@@ -222,8 +214,9 @@ class _DateHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return SliverToBoxAdapter(
       child: Container(
-        padding: const EdgeInsets.only(top: 24.0, bottom: 8.0, left: 18.0, right: 18.0),
-        color: Colors.white, // Match scaffold background
+        padding: const EdgeInsets.only(
+            top: 24.0, bottom: 8.0, left: 18.0, right: 18.0),
+        color: Colors.white,
         child: Text(
           title,
           style: TextStyle(
@@ -237,9 +230,9 @@ class _DateHeader extends StatelessWidget {
   }
 }
 
-// Private widget for a single expense item in the list (Flat ListTile)
+// Private widget for a single expense item
 class _ExpenseListItem extends StatelessWidget {
-  final Expense expense;
+  final Expense expense; // <-- UPDATED: Uses the new model
 
   const _ExpenseListItem({
     required this.expense,
@@ -247,21 +240,27 @@ class _ExpenseListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final category = context.watch<CategoryProvider>()
+        .getCategory(expense.category.toLowerCase());
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0), // Less horizontal padding
+      padding: const EdgeInsets.symmetric(horizontal: 8.0),
       child: ListTile(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),
-        // Modern rounded-square icon
         leading: Container(
           width: 44,
           height: 44,
           decoration: BoxDecoration(
             color: Colors.blue.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12.0), // Rounded square
+            borderRadius: BorderRadius.circular(12.0),
           ),
-          child: Icon(expense.icon, color: Colors.blue[800], size: 24),
+          // <-- UPDATED: Use the helper function
+          child: Icon(
+              category.iconData,
+            color: AppColors.primaryColor,
+            size: 24,
+          ),
         ),
         title: Text(
           expense.merchant,
@@ -287,15 +286,15 @@ class _ExpenseListItem extends StatelessWidget {
           ),
         ),
         onTap: () {
-          // Navigate to the Expense Detail Screen
+          // This should still work, assuming ExpenseDetailScreen
+          // was also updated to use the new Expense model.
           NavigationManager.push(
             context,
-            ExpenseDetailScreen(expense: expense), // The new page
-            type: TransitionType.platform, // The transition you want
+            ExpenseDetailScreen(expense: expense),
+            type: TransitionType.platform,
           );
         },
       ),
     );
   }
 }
-

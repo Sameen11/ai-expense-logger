@@ -1,7 +1,9 @@
+import 'package:ai_expense_logger/common/colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../navigation/nav_manager.dart';
+import '../../services/shared_pref_service.dart';
 import '../authentication/auth_wrapper.dart'; // Import the AuthWrapper
 
 // Data Model (no changes)
@@ -57,7 +59,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   // ** UPDATED **
   // When onboarding is finished or skipped, navigate to the AuthWrapper.
   // The AuthWrapper will then decide whether to show the Login screen or Home screen.
-  void _finishOnboarding() {
+  void _finishOnboarding() async {
+    final prefs = SharedPrefService();
+    await prefs.setBool('onboarding_complete', true);
     NavigationManager.pushReplacement(
       context,
       AuthWrapper(), // The new page you want to show
@@ -142,7 +146,7 @@ class NextButton extends StatelessWidget {
       style: ElevatedButton.styleFrom(
         shape: const CircleBorder(),
         padding: const EdgeInsets.all(20),
-        backgroundColor: Colors.blue,
+        backgroundColor: AppColors.primaryColor,
         elevation: 5,
       ),
       child: AnimatedSwitcher(
@@ -168,7 +172,7 @@ class PageIndicator extends StatelessWidget {
       height: 8.0,
       width: isActive ? 24.0 : 8.0,
       decoration: BoxDecoration(
-        color: isActive ? Colors.blue : Colors.grey.shade300,
+        color: isActive ? AppColors.primaryColor : Colors.grey.shade300,
         borderRadius: const BorderRadius.all(Radius.circular(12)),
       ),
     );

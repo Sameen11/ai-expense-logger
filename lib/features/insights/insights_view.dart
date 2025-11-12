@@ -1,3 +1,4 @@
+import 'package:ai_expense_logger/common/colors.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -7,9 +8,10 @@ class InsightsView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[100], // Light background
+      backgroundColor: AppColors.bgColor, // Light background
       appBar: AppBar(
         backgroundColor: Colors.grey[100],
+        surfaceTintColor: Colors.transparent, // No shadow
         elevation: 0,
         // Title with month selector
         title: Row(
@@ -64,7 +66,7 @@ class InsightsView extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(24.0),
       decoration: BoxDecoration(
-        color: Colors.blue[700],
+        color: AppColors.primaryColor,
         borderRadius: BorderRadius.circular(16.0),
       ),
       child: Column(

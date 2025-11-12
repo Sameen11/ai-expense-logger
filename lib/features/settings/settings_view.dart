@@ -1,13 +1,11 @@
-import 'package:ai_expense_logger/core/app_routes.dart';
+import 'package:ai_expense_logger/common/colors.dart';
 import 'package:ai_expense_logger/features/authentication/provider/auth_provider.dart';
 import 'package:ai_expense_logger/features/upgrade/premium_view.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-
-// --- IMPORT THE NEW PROFILE EDIT SCREEN ---
-import '../profile_edit/profile_edit.dart';
-import '../../navigation/nav_manager.dart'; // Import your NavigationManager
+import '../../navigation/nav_manager.dart';
+import 'category/add_category.dart';
+import 'profile_edit/profile_edit.dart';
 
 class SettingsView extends StatelessWidget {
   const SettingsView({super.key});
@@ -16,7 +14,7 @@ class SettingsView extends StatelessWidget {
   Widget build(BuildContext context) {
     // We use a Scaffold here to get the AppBar
     return Scaffold(
-      backgroundColor: Colors.grey[100], // Lighter grey background
+      backgroundColor: AppColors.bgColor, // Lighter grey background
       appBar: AppBar(
         surfaceTintColor: Colors.transparent,
         title: const Text(
@@ -26,7 +24,7 @@ class SettingsView extends StatelessWidget {
             fontWeight: FontWeight.bold,
           ),
         ),
-        backgroundColor: Colors.grey[100], // Match scaffold background
+        backgroundColor: AppColors.bgColor, // Match scaffold background
         elevation: 0,
         centerTitle: false,
         automaticallyImplyLeading: false, // Removes back button
@@ -57,6 +55,18 @@ class SettingsView extends StatelessWidget {
                   value: 'Not Set',
                   onTap: () {
                     // Handle payment method tap
+                  },
+                ),
+                _SettingsTextValueOption(
+                  title: 'Manage Categories',
+                  value: 'Set',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const AddCategoryScreen(),
+                      ),
+                    );
                   },
                 ),
                 const _SettingsToggleOption(title: 'Keep Data Local Only'),
@@ -323,7 +333,7 @@ class _AccountPlanCard extends StatelessWidget {
                     );
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
+                    backgroundColor: AppColors.primaryColor,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(

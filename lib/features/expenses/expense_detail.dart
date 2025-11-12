@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
-import 'model.dart';
+import '../../models/expense.dart';
+import '../../providers/category_provider.dart';
 
 class ExpenseDetailScreen extends StatelessWidget {
   final Expense expense;
@@ -101,6 +103,8 @@ class ExpenseDetailScreen extends StatelessWidget {
 
   // Widget for the main details card
   Widget _buildDetailsCard(BuildContext context) {
+    final category = context.watch<CategoryProvider>()
+        .getCategory(expense.category.toLowerCase());
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -128,7 +132,7 @@ class ExpenseDetailScreen extends StatelessWidget {
             context,
             title: 'Category',
             value: expense.category,
-            icon: expense.icon,
+            icon: category.iconData,
           ),
           _buildDetailRow(
             context,
