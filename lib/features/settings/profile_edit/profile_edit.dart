@@ -4,16 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../../navigation/nav_manager.dart';
+import '../../../widgets/custom_text_field.dart';
+import '../../../widgets/notification_bar.dart';
+import '../../authentication/forgot_password_screen.dart';
+
 class ProfileEditView extends StatefulWidget {
-  final String currentName;
-  final String currentEmail;
-  final String currentPhoneNumber; // --- ADDED ---
 
   const ProfileEditView({
     super.key,
-    required this.currentName,
-    required this.currentEmail,
-    this.currentPhoneNumber = '', // --- ADDED --- (default to empty string)
   });
 
   @override
@@ -21,31 +20,81 @@ class ProfileEditView extends StatefulWidget {
 }
 
 class _ProfileEditViewState extends State<ProfileEditView> {
+// Controllers
   late final TextEditingController _nameController;
   late final TextEditingController _emailController;
-  late final TextEditingController _phoneController; // --- ADDED ---
+
+
+  // ⭐️ State to hold initial values for comparison
+  String _initialName = '';
+  String _initialEmail = '';
+
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
+  bool _isDataLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.currentName);
-    _emailController = TextEditingController(text: widget.currentEmail);
-    _phoneController = TextEditingController(text: widget.currentPhoneNumber); // --- ADDED ---
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    final authProvider = context.read<AuthProvider>();
+
+    try {
+      // This now returns the country code as well
+      final data = await authProvider.getProfileForEdit();
+
+      // ⭐️ Store initial values
+      _initialName = data['name'] ?? '';
+      _initialEmail = data['email'] ?? '';
+
+      // ⭐️ Set controllers and state
+      _nameController = TextEditingController(text: _initialName);
+      _emailController = TextEditingController(text: _initialEmail);
+
+
+      if (mounted) {
+        setState(() => _isDataLoading = false);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load profile: ${e.toString()}')),
+        );
+        Navigator.of(context).pop();
+      }
+    }
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _emailController.dispose();
-    _phoneController.dispose(); // --- ADDED ---
+    if (!_isDataLoading) {
+      _nameController.dispose();
+      _emailController.dispose();
+    }
     super.dispose();
   }
 
   Future<void> _updateProfile() async {
-    // Validate the form
-    if (!_formKey.currentState!.validate()) {
+    if (!_formKey.currentState!.validate()) return;
+
+    final newName = _nameController.text.trim();
+    final newEmail = _emailController.text.trim();
+
+    // Check for changes
+    final bool nameChanged = newName != _initialName;
+    final bool emailChanged = newEmail != _initialEmail;
+
+    if (!nameChanged && !emailChanged) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No changes to save.'),
+          backgroundColor: Colors.blue,
+        ),
+      );
+      Navigator.of(context).pop();
       return;
     }
 
@@ -53,53 +102,44 @@ class _ProfileEditViewState extends State<ProfileEditView> {
 
     try {
       final authProvider = context.read<AuthProvider>();
-      final newName = _nameController.text.trim();
-      final newEmail = _emailController.text.trim();
-      final newPhoneNumber = _phoneController.text.trim(); // --- ADDED ---
 
-      // Call the update method from your provider
-      // You will need to update your AuthProvider/AuthService
-      // to accept and save the phone number.
+      // ⭐️ Pass the ISO code to the provider
       await authProvider.updateUserProfile(
         newName: newName,
         newEmail: newEmail,
-        newPhoneNumber: newPhoneNumber, // --- PASSING NEW DATA ---
       );
 
-      // Show success message if still on screen
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Profile updated successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        // Go back to settings screen
+        // Update initial values on success
+        _initialName = newName;
+        _initialEmail = newEmail;
+        SnackBarUtils.showSuccess(context, "Profile updated successfully!");
         Navigator.of(context).pop();
       }
     } catch (e) {
-      // Handle errors (e.g., email already in use, requires re-authentication)
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to update profile: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        SnackBarUtils.showSuccess(context, "Failed to update profile");
       }
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
+
   @override
   Widget build(BuildContext context) {
+    // ⭐️ Show a loader while data is being fetched
+    if (_isDataLoading) {
+      return Scaffold(
+        appBar: AppBar(backgroundColor: AppColors.bgColorWhite),
+        body: const Center(child: CircularProgressIndicator(color: AppColors.primaryColor)),
+      );
+    }
     return Scaffold(
-      backgroundColor: AppColors.bgColor,
+      backgroundColor: AppColors.bgColorWhite,
       appBar: AppBar(
-        backgroundColor: AppColors.bgColor,
+        backgroundColor: AppColors.bgColorWhite,
+        shadowColor: Colors.transparent,
         title: const Text(
           'Edit Profile',
           style: TextStyle(
@@ -108,7 +148,7 @@ class _ProfileEditViewState extends State<ProfileEditView> {
           ),
         ),
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black), // Ensure back button is visible
+        iconTheme: const IconThemeData(color: Colors.black),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
@@ -116,17 +156,12 @@ class _ProfileEditViewState extends State<ProfileEditView> {
           key: _formKey,
           child: Column(
             children: [
-              // Display Name Field
-              TextFormField(
+
+              // NAME
+              CustomTextField(
                 controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Full Name',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.all(Radius.circular(12)),
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
+                labelText: 'Full Name',
+                keyboardType: TextInputType.emailAddress,
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
                     return 'Please enter your name';
@@ -135,46 +170,23 @@ class _ProfileEditViewState extends State<ProfileEditView> {
                 },
               ),
               const SizedBox(height: 20),
-              // Email Field
-              TextFormField(
+
+              // EMAIL
+              CustomTextField(
                 controller: _emailController,
-                decoration: const InputDecoration(
-                  labelText: 'Email Address',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.all(Radius.circular(12)),
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
+                labelText: 'Email',
                 keyboardType: TextInputType.emailAddress,
-                validator: (value) {
-                  if (value == null || !value.contains('@')) {
-                    return 'Please enter a valid email';
-                  }
-                  return null;
-                },
+                validator: (value) =>
+                (value == null || !value.contains('@'))
+                    ? 'Enter a valid email'
+                    : null,
               ),
-              const SizedBox(height: 20), // --- ADDED FIELD ---
-              // Phone Number Field
-              TextFormField(
-                controller: _phoneController,
-                decoration: const InputDecoration(
-                  labelText: 'Phone Number (Optional)',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.all(Radius.circular(12)),
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                  prefixIcon: Icon(Icons.phone_outlined),
-                ),
-                keyboardType: TextInputType.phone,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly, // Allow only numbers
-                ],
-                // No validator, as it's optional
-              ),
+              const SizedBox(height: 20),
+
+              // PHONE
               const SizedBox(height: 30),
-              // Update Button
+
+              // UPDATE BUTTON
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -182,9 +194,9 @@ class _ProfileEditViewState extends State<ProfileEditView> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blue,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30), // Pill shape
+                      borderRadius: BorderRadius.circular(30),
                     ),
                     elevation: 5,
                     shadowColor: Colors.blue.withOpacity(0.4),
@@ -195,18 +207,40 @@ class _ProfileEditViewState extends State<ProfileEditView> {
                     height: 24,
                     child: CircularProgressIndicator(
                       color: AppColors.bgColor,
-                      strokeWidth: 3,
+                      strokeWidth: 2,
                     ),
                   )
                       : const Text(
                     'Update Profile',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
               ),
+
+              const SizedBox(height: 20),
+
+              // ⭐️ RESET PASSWORD BUTTON
+              TextButton(
+                onPressed: () {
+                  NavigationManager.push(
+                    context,
+                    const ForgotPasswordScreen(),
+                    type: TransitionType.slideFromRight,
+                  );
+                },
+                child: const Text(
+                  "Reset Password",
+                  style: TextStyle(
+                    color: Colors.blue,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+
             ],
           ),
         ),

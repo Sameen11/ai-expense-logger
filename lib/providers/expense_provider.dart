@@ -63,6 +63,7 @@ class ExpenseProvider with ChangeNotifier {
     required double amount,
     required DateTime date,
     required String category,
+    required String emoji,
     String? notes,
   }) async {
     if (_currentUid == null) {
@@ -79,6 +80,7 @@ class ExpenseProvider with ChangeNotifier {
         category: category,
         notes: notes,
         createdAt: Timestamp.now(), // Set creation time
+        emoji: emoji,
       );
       await _expenseService.addExpense(_currentUid!, newExpense);
     } catch (e) {

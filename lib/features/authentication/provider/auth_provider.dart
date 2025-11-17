@@ -1,20 +1,29 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../../../models/user_model.dart';
+import '../../../services/firestore_service.dart';
 import '../service/auth_service.dart';
 
 // AuthProvider manages the application's authentication state.
 // It uses ChangeNotifier to notify listening widgets of any state changes.
 class AuthProvider with ChangeNotifier {
   final AuthService _authService;
+  final FirestoreService firestoreService = FirestoreService();
   User? _user;
   bool _isLoading = false;
+  UserModel? _userProfile;
   String? _errorMessage;
 
   // Constructor: Initializes the provider and sets up a listener for auth state changes.
   AuthProvider(this._authService) {
     _authService.authStateChanges.listen(_onAuthStateChanged);
     _user = _authService.currentUser;
+    // ⭐️ Fetch profile if user is already logged in
+    if (_user != null) {
+      _fetchUserProfile(_user!.uid);
+    }
   }
 
   // Getters for the state properties. Widgets can listen to these.
@@ -22,11 +31,30 @@ class AuthProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   bool get isAuthenticated => _user != null;
+  UserModel? get userProfile => _userProfile;
 
   // Private method to handle auth state changes from the AuthService stream.
   void _onAuthStateChanged(User? user) {
     _user = user;
-    notifyListeners(); // Notify all listening widgets to rebuild.
+    if (user != null) {
+      _fetchUserProfile(user.uid); // ⭐️ Fetch profile on login
+    } else {
+      _userProfile = null; // ⭐️ Clear profile on logout
+    }
+    notifyListeners();
+  }
+
+  // ⭐️ NEW: Private method to fetch and cache the profile
+  Future<void> _fetchUserProfile(String uid) async {
+    try {
+      final data = await firestoreService.getUserData(uid);
+      if (data != null) {
+        _userProfile = UserModel.fromMap(uid, data);
+      }
+    } catch (e) {
+      _errorMessage = e.toString();
+    }
+    notifyListeners();
   }
 
   // Helper method to manage loading state and error messages.
@@ -42,6 +70,25 @@ class AuthProvider with ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  // ⭐️ UPDATED: to use the cached profile
+  Future<Map<String, String>> getProfileForEdit() async {
+    if (_user == null) throw Exception('No user logged in.');
+
+    // 1. Check for cached profile
+    if (_userProfile == null) {
+      // 2. If not cached, fetch it
+      await _fetchUserProfile(_user!.uid);
+    }
+
+    // 3. Return data from the cached profile
+    return {
+      'name': _userProfile?.displayName ?? _user!.displayName ?? '',
+      'email': _userProfile?.email ?? _user!.email ?? '',
+      'phone': _userProfile?.phoneNumber ?? '',
+      'countryCode': _userProfile?.phoneCountryCode ?? '', // ⭐️ ADD THIS
+    };
   }
 
   // Public methods for UI to call for authentication actions.
@@ -77,29 +124,35 @@ class AuthProvider with ChangeNotifier {
   Future<void> updateUserProfile({
     required String newName,
     required String newEmail,
-    String? newPhoneNumber, // --- ADDED newPhoneNumber ---
+    String? newPhoneNumber,
+    String? newPhoneCountryISOCode, // ⭐️ ADD THIS
   }) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
     try {
-      // 1. Call the service to perform the update
       await _authService.updateUserProfile(
         newName: newName,
         newEmail: newEmail,
-        newPhoneNumber: newPhoneNumber, // --- PASS THE PHONE NUMBER ---
+        newPhoneNumber: newPhoneNumber,
+        newPhoneCountryCode: newPhoneCountryISOCode, // ⭐️ PASS IT
       );
 
-      // 2. Manually update the local user object
-      //    The authStateChanges stream might not fire for profile updates,
-      //    so we get the new user data from the service.
+      // ⭐️ Manually update the local user object and profile
       _user = _authService.currentUser;
+      _userProfile = _userProfile?.copyWith(
+        displayName: newName,
+        email: newEmail,
+        phoneNumber: newPhoneNumber,
+        phoneCountryCode: newPhoneCountryISOCode,
+      );
+
     } catch (e) {
       _errorMessage = e.toString();
-      throw e; // Re-throw so the UI can catch it (e.g., for error messages)
+      throw e;
     } finally {
       _isLoading = false;
-      notifyListeners(); // Notifies UI of loading stop AND the new _user data
+      notifyListeners();
     }
   }
 

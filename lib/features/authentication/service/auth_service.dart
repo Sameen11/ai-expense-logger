@@ -78,7 +78,8 @@ class AuthService {
   Future<void> updateUserProfile({
     required String newName,
     required String newEmail,
-    String? newPhoneNumber, // --- ADDED newPhoneNumber ---
+    String? newPhoneNumber,
+    String? newPhoneCountryCode,
   }) async {
     final user = _firebaseAuth.currentUser;
     if (user == null) {
@@ -102,8 +103,8 @@ class AuthService {
       final Map<String, dynamic> dataToUpdate = {
         'displayName': newName,
         'email': newEmail,
-        // Only add phone number if it's not null
-        if (newPhoneNumber != null) 'phoneNumber': newPhoneNumber,
+        'phoneNumber': newPhoneNumber, // Will be null or a value
+        'phoneCountryCode': newPhoneCountryCode, // ⭐️ ADD THIS
       };
 
       // Remove any keys where the value is null, just in case

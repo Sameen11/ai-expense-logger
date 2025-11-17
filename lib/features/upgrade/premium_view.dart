@@ -23,6 +23,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
           icon: const Icon(Icons.close, color: Colors.black),
           onPressed: () {
             // Handle close action
+            Navigator.of(context).pop();
           },
         ),
         title: const Text(

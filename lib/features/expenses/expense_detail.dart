@@ -103,8 +103,6 @@ class ExpenseDetailScreen extends StatelessWidget {
 
   // Widget for the main details card
   Widget _buildDetailsCard(BuildContext context) {
-    final category = context.watch<CategoryProvider>()
-        .getCategory(expense.category.toLowerCase());
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -132,7 +130,7 @@ class ExpenseDetailScreen extends StatelessWidget {
             context,
             title: 'Category',
             value: expense.category,
-            icon: category.iconData,
+            emoji: expense.emoji,
           ),
           _buildDetailRow(
             context,
@@ -155,7 +153,7 @@ class ExpenseDetailScreen extends StatelessWidget {
       BuildContext context, {
         required String title,
         required String value,
-        IconData? icon,
+        String? emoji,
         bool isAmount = false,
         bool isLast = false,
       }) {
@@ -178,8 +176,11 @@ class ExpenseDetailScreen extends StatelessWidget {
           ),
           Row(
             children: [
-              if (icon != null) ...[
-                Icon(icon, color: Colors.blue[800], size: 20),
+              if (emoji != null) ...[
+                Text(
+                  emoji ?? "📦",
+                  style: const TextStyle(fontSize: 20),
+                ),
                 const SizedBox(width: 8),
               ],
               Text(

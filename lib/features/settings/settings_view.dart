@@ -2,14 +2,55 @@ import 'package:ai_expense_logger/common/colors.dart';
 import 'package:ai_expense_logger/features/authentication/provider/auth_provider.dart';
 import 'package:ai_expense_logger/features/upgrade/premium_view.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../navigation/nav_manager.dart';
+import '../../providers/expense_provider.dart';
+import '../../services/export_service.dart';
+import '../../widgets/export_bottom_sheet.dart';
+import '../../widgets/notification_bar.dart';
 import 'category/add_category.dart';
 import 'profile_edit/profile_edit.dart';
 
-class SettingsView extends StatelessWidget {
+class SettingsView extends StatefulWidget {
   const SettingsView({super.key});
 
+  @override
+  State<SettingsView> createState() => _SettingsViewState();
+}
+
+class _SettingsViewState extends State<SettingsView> {
+
+  Future<void> _showExportOptions() async {
+    // Get the provider once
+    final expenseProvider = context.read<ExpenseProvider>();
+
+    // Show the bottom sheet and wait for a result
+    final ExportFormat? format = await showExportBottomSheet(context);
+
+    // Do nothing if the user dismissed the sheet
+    if (format == null || !mounted) return;
+
+
+    try {
+      final expenses = expenseProvider.expensesForSelectedMonth;
+      if (expenses.isEmpty) {
+        SnackBarUtils.showSuccess(context, 'No data to export for this month.');
+        return;
+      }
+
+      final monthName = DateFormat('yyyy-MM').format(expenseProvider.selectedMonth);
+
+      // Call the single export service
+      await ExportService().exportExpenses(expenses, monthName, format);
+
+      // Show success (optional)
+      SnackBarUtils.showSuccess(context, 'Successfully exported to ${format.name.toUpperCase()}!');
+    } catch (e) {
+      // Show error
+      SnackBarUtils.showError(context, 'Error exporting file: ${e.toString()}');
+    }
+  }
   @override
   Widget build(BuildContext context) {
     // We use a Scaffold here to get the AppBar
@@ -44,6 +85,11 @@ class SettingsView extends StatelessWidget {
             _SettingsGroup(
               children: [
                 _SettingsTextValueOption(
+                  // --- NEW ICON ---
+                  icon: const _SettingsIcon(
+                    icon: Icons.attach_money_rounded,
+                    color: Colors.green,
+                  ),
                   title: 'Currency',
                   value: 'USD',
                   onTap: () {
@@ -51,6 +97,11 @@ class SettingsView extends StatelessWidget {
                   },
                 ),
                 _SettingsTextValueOption(
+                  // --- NEW ICON ---
+                  icon: const _SettingsIcon(
+                    icon: Icons.category_rounded,
+                    color: Colors.orange,
+                  ),
                   title: 'Manage Categories',
                   value: 'Set',
                   onTap: () {
@@ -62,17 +113,26 @@ class SettingsView extends StatelessWidget {
                     );
                   },
                 ),
-                // const _SettingsToggleOption(title: 'Keep Data Local Only'),
+                // const _SettingsToggleOption(
+                //   icon: _SettingsIcon(
+                //     icon: Icons.data_usage_rounded,
+                //     color: Colors.blue,
+                //   ),
+                //   title: 'Keep Data Local Only',
+                // ),
               ],
             ),
             const _SettingsSectionHeader(title: 'EXPORT'),
             _SettingsGroup(
               children: [
                 _SettingsOption(
+                  // --- NEW ICON ---
+                  icon: const _SettingsIcon(
+                    icon: Icons.upload_file_rounded,
+                    color: Color(0xFF007AFF), // iOS Blue
+                  ),
                   title: 'Export All Data',
-                  onTap: () {
-                    // Handle export tap
-                  },
+                  onTap: _showExportOptions,
                 ),
               ],
             ),
@@ -80,12 +140,22 @@ class SettingsView extends StatelessWidget {
             _SettingsGroup(
               children: [
                 _SettingsOption(
+                  // --- NEW ICON ---
+                  icon: const _SettingsIcon(
+                    icon: Icons.shield_rounded,
+                    color: Colors.blueGrey,
+                  ),
                   title: 'Privacy Policy',
                   onTap: () {
                     // Handle privacy policy tap
                   },
                 ),
                 _SettingsOption(
+                  // --- NEW ICON ---
+                  icon: const _SettingsIcon(
+                    icon: Icons.article_rounded,
+                    color: Colors.grey,
+                  ),
                   title: 'Terms of Service',
                   onTap: () {
                     // Handle terms tap
@@ -97,27 +167,25 @@ class SettingsView extends StatelessWidget {
             _SettingsGroup(
               children: [
                 _SettingsOption(
+                  // --- NEW ICON ---
+                  icon: const _SettingsIcon(
+                    icon: Icons.help_outline_rounded,
+                    color: Colors.purple,
+                  ),
                   title: 'Help & FAQ',
                   onTap: () {
                     // Handle help tap
                   },
                 ),
                 _SettingsOption(
+                  // --- NEW ICON ---
+                  icon: const _SettingsIcon(
+                    icon: Icons.email_rounded,
+                    color: Colors.redAccent,
+                  ),
                   title: 'Contact Us',
                   onTap: () {
                     // Handle contact tap
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            _SettingsGroup(
-              children: [
-                _SettingsOption(
-                  title: 'Version 1.0.0',
-                  showArrow: true, // Changed to true for consistency
-                  onTap: () {
-                    // Handle version tap
                   },
                 ),
               ],
@@ -139,6 +207,37 @@ class SettingsView extends StatelessWidget {
 
 // --- Reusable Private Widgets ---
 
+// ------------------------------------
+// --- ⭐️ NEW WIDGET ⭐️ ---
+// This creates the colored, rounded-square icon background
+// ------------------------------------
+class _SettingsIcon extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+
+  const _SettingsIcon({
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 30, // iOS icon container size
+      height: 30,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(6), // iOS radius
+      ),
+      child: Icon(
+        icon,
+        color: Colors.white,
+        size: 20,
+      ),
+    );
+  }
+}
+
 // A new reusable widget for grouping settings
 class _SettingsGroup extends StatelessWidget {
   final List<Widget> children;
@@ -156,9 +255,6 @@ class _SettingsGroup extends StatelessWidget {
         // ClipRRect to ensure children respect the rounded corners
         child: ClipRRect(
           borderRadius: BorderRadius.circular(12),
-          // FIX: Add a Material widget. This provides the "canvas"
-          // for the InkWell ripple effects from the ListTiles to draw on.
-          // Without this, the ripple effect is often invisible.
           child: Material(
             color: Colors.white,
             child: ListView.separated(
@@ -211,6 +307,7 @@ class _UserProfileSection extends StatelessWidget {
     final authProvider = context.watch<AuthProvider>();
     // Use the provider's user object, which updates on notifyListeners()
     final user = authProvider.user;
+    debugPrint("User: ${user}");
 
     String email = user?.email ?? 'john@example.com';
     String name = user?.displayName ?? 'John Doe';
@@ -246,14 +343,10 @@ class _UserProfileSection extends StatelessWidget {
       ),
       trailing: const Icon(Icons.chevron_right, color: Colors.grey),
       onTap: () {
-        // --- THIS IS THE NAVIGATION LOGIC ---
-        // We use the current name and email to pre-fill the form
+        debugPrint("Profile tapped: ${user?.phoneNumber}");
         NavigationManager.push(
           context,
-          ProfileEditView(
-            currentName: name,
-            currentEmail: email,
-          ),
+          ProfileEditView(),
           type: TransitionType.slideFromRight, // Use your modern transition
         );
       },
@@ -318,11 +411,10 @@ class _AccountPlanCard extends StatelessWidget {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
-                    // Use your NavigationManager for consistency
                     NavigationManager.push(
                       context,
                       PremiumScreen(),
-                      type: TransitionType.slideFromBottom, // A modal slide is nice here
+                      type: TransitionType.slideFromBottom,
                     );
                   },
                   style: ElevatedButton.styleFrom(
@@ -356,16 +448,20 @@ class _SettingsOption extends StatelessWidget {
   final String title;
   final VoidCallback onTap;
   final bool showArrow;
+  final Widget? icon; // --- ADDED ICON ---
 
   const _SettingsOption({
     required this.title,
     required this.onTap,
     this.showArrow = true,
+    this.icon, // --- ADDED ICON ---
+    super.key,
   });
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
+      leading: icon, // --- USED ICON ---
       title: Text(title),
       trailing: showArrow ? const Icon(Icons.chevron_right, color: Colors.grey) : null,
       onTap: onTap,
@@ -378,16 +474,20 @@ class _SettingsTextValueOption extends StatelessWidget {
   final String title;
   final String value;
   final VoidCallback onTap;
+  final Widget? icon; // --- ADDED ICON ---
 
   const _SettingsTextValueOption({
     required this.title,
     required this.value,
     required this.onTap,
+    this.icon, // --- ADDED ICON ---
+    super.key,
   });
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
+      leading: icon, // --- USED ICON ---
       title: Text(title),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
@@ -408,7 +508,12 @@ class _SettingsTextValueOption extends StatelessWidget {
 // A settings row with text and a toggle switch
 class _SettingsToggleOption extends StatefulWidget {
   final String title;
-  const _SettingsToggleOption({required this.title});
+  final Widget? icon; // --- ADDED ICON ---
+  const _SettingsToggleOption({
+    required this.title,
+    this.icon, // --- ADDED ICON ---
+    super.key,
+  });
 
   @override
   State<_SettingsToggleOption> createState() => _SettingsToggleOptionState();
@@ -420,6 +525,8 @@ class _SettingsToggleOptionState extends State<_SettingsToggleOption> {
   @override
   Widget build(BuildContext context) {
     return SwitchListTile(
+      // SwitchListTile uses 'secondary' for the leading icon
+      secondary: widget.icon, // --- USED ICON ---
       title: Text(widget.title),
       value: _isEnabled,
       onChanged: (bool value) {
@@ -428,7 +535,7 @@ class _SettingsToggleOptionState extends State<_SettingsToggleOption> {
           // You can also save this value to SharedPreferences or database
         });
       },
-      activeColor: Colors.blue,
+      activeColor: AppColors.primaryColor,
     );
   }
 }

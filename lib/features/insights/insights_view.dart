@@ -4,11 +4,13 @@ import 'package:ai_expense_logger/providers/expense_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-// --- NEW IMPORT ---
 import 'package:fl_chart/fl_chart.dart';
 
 import 'package:ai_expense_logger/navigation/nav_manager.dart';
-import '../../services/csv_exporter.dart';
+import '../../services/export_service.dart';
+import '../../widgets/data_picker_dialog.dart';
+import '../../widgets/export_bottom_sheet.dart';
+import '../../widgets/notification_bar.dart';
 import 'all_categories_screen.dart';
 import 'category_progress_item.dart';
 
@@ -22,79 +24,65 @@ class InsightsView extends StatefulWidget {
 class _InsightsViewState extends State<InsightsView> {
   /// Shows the month picker dialog
   bool _isExporting = false;
+
+  // --- UPDATED: Swapped native picker for custom picker ---
   Future<void> _selectMonth(
       BuildContext context, ExpenseProvider provider) async {
-    final DateTime? picked = await showDatePicker(
+    final DateTime? picked = await showCustomDatePicker(
       context: context,
       initialDate: provider.selectedMonth,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2101),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: AppColors.primaryColor, // Header background
-              onPrimary: Colors.white, // Header text
-              onSurface: Color(0xFF1D1D1F), // Calendar text
-            ),
-            dialogBackgroundColor: Colors.white,
-
-            // *** THE FIX IS HERE ***
-            // It's 'DialogThemeData', not 'DialogTheme'
-            dialogTheme: DialogThemeData(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16.0),
-              ),
-            ),
-
-            // *** I've also corrected this for you ***
-            // It's 'TextButtonThemeData', not 'TextButtonTheme'
-            textButtonTheme: TextButtonThemeData(
-              style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFF4A90E2), // OK/Cancel button color
-              ),
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
-    if (picked != null && picked != provider.selectedMonth) {
-      provider.updateSelectedMonth(picked);
+
+    if (picked != null) {
+      // We only care about the month and year
+      final newMonth = DateTime(picked.year, picked.month);
+      if (newMonth != provider.selectedMonth) {
+        provider.updateSelectedMonth(newMonth);
+      }
     }
   }
 
-  // --- NEW FUNCTION to handle the export logic ---
-  Future<void> _handleExport(ExpenseProvider provider) async {
-    setState(() { _isExporting = true; });
+  Future<void> _showExportOptions() async {
+    // Get the provider once
+    final expenseProvider = context.read<ExpenseProvider>();
+
+    // Show the bottom sheet and wait for a result
+    final ExportFormat? format = await showExportBottomSheet(context);
+
+    // Do nothing if the user dismissed the sheet
+    if (format == null || !mounted) return;
+
+    // Start loading
+    setState(() {
+      _isExporting = true;
+    });
 
     try {
-      final expenses = provider.expensesForSelectedMonth;
+      final expenses = expenseProvider.expensesForSelectedMonth;
       if (expenses.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No data to export for this month.'),
-            backgroundColor: Colors.orange,
-          ),
-        );
+        SnackBarUtils.showSuccess(context, 'No data to export for this month.');
         return;
       }
 
-      final monthName = DateFormat('yyyy-MM').format(provider.selectedMonth);
+      final monthName =
+      DateFormat('yyyy-MM').format(expenseProvider.selectedMonth);
 
-      // Call our service
-      await CsvExporter().exportExpenses(expenses, monthName);
+      // Call the single export service
+      await ExportService().exportExpenses(expenses, monthName, format);
 
+      // Show success (optional)
+      SnackBarUtils.showSuccess(
+          context, 'Successfully exported to ${format.name.toUpperCase()}!');
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error exporting file: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      // Show error
+      SnackBarUtils.showError(context, 'Error exporting file: ${e.toString()}');
     } finally {
-      // Ensure the loading spinner always stops
-      setState(() { _isExporting = false; });
+      // Stop loading
+      if (mounted) {
+        setState(() {
+          _isExporting = false;
+        });
+      }
     }
   }
 
@@ -148,8 +136,9 @@ class _InsightsViewState extends State<InsightsView> {
                 ),
               )
                   : IconButton(
-                icon: Icon(Icons.download_outlined, color: Colors.grey[800]),
-                onPressed: () => _handleExport(expenseProvider),
+                icon: Icon(Icons.download_outlined,
+                    color: Colors.grey[800]),
+                onPressed: _showExportOptions,
               ),
             ],
           ),
@@ -300,28 +289,32 @@ class _InsightsViewState extends State<InsightsView> {
                   borderData: FlBorderData(show: false),
                   sectionsSpace: 2, // Space between slices
                   centerSpaceRadius: 40, // Size of the center hole
-                  sections: expenseProvider.pieChartData, // <-- Data from provider
+                  sections:
+                  expenseProvider.pieChartData, // <-- Data from provider
                 ),
               ),
             ),
           const SizedBox(height: 24),
 
           // --- Dynamic Category List (Top 3) ---
-          ...sortedCategories.take(3).toList().asMap().entries.map((indexedEntry) {
-            final index = indexedEntry.key;
-            final categoryName = indexedEntry.value.key;
-            final amount = indexedEntry.value.value;
-            final category = categoryProvider.getCategory(categoryName);
-            final percentage = (totalSpent > 0) ? amount / totalSpent : 0.0;
+          ...sortedCategories.take(3).toList().asMap().entries.map(
+                  (indexedEntry) {
+                debugPrint("Entry: ${indexedEntry.key}");
+                final index = indexedEntry.key;
+                final categoryName = indexedEntry.value.key;
+                final amount = indexedEntry.value.value;
+                final category = categoryProvider.getCategory(categoryName);
+                final percentage = (totalSpent > 0) ? amount / totalSpent : 0.0;
+                // emoji
 
-            return CategoryProgressItem(
-              icon: category.iconData,
-              title: categoryName,
-              amount: amount,
-              percentage: percentage,
-              color: colors[index % colors.length],
-            );
-          }),
+                return CategoryProgressItem(
+                  icon: category.iconData,
+                  title: categoryName,
+                  amount: amount,
+                  percentage: percentage,
+                  color: colors[index % colors.length],
+                );
+              }),
           const SizedBox(height: 16),
           Center(
             child: TextButton(

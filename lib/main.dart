@@ -84,7 +84,7 @@ class MyApp extends StatelessWidget {
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12.0),
                   borderSide: const BorderSide(
-                      color: AppColors.bgColor, width: 1.5),
+                      color: AppColors.bgColor, width: 1),
                 ),
                 labelStyle: TextStyle(color: Colors.grey[600]),
               ),

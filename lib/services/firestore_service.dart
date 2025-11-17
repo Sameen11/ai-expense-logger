@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../models/user_model.dart';
+
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
@@ -18,14 +20,9 @@ class FirestoreService {
   Future<void> createUserDocument(User user) async {
     final docRef = _usersCollection.doc(user.uid);
 
-    final userData = {
-      'uid': user.uid,
-      'email': user.email,
-      'displayName': user.displayName,
-      'phoneNumber': user.phoneNumber, // Often null initially
-      'createdAt': FieldValue.serverTimestamp(),
-      'photoURL': user.photoURL,
-    };
+    // ⭐️ Use the UserModel to create the data map
+    final userModel = UserModel.fromFirebaseUser(user);
+    final userData = userModel.toMap();
 
     // Use set() to create the document
     await docRef.set(userData);
