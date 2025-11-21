@@ -6,8 +6,8 @@ import '../../providers/expense_provider.dart';
 import '../../widgets/notification_bar.dart';
 
 class AddExpenseManuallyScreen extends StatefulWidget {
-  // Using Dart record type for passed data: (merchant, amount, category)
-  final (String, double, String)? extractedData;
+  // Extended data: (merchant, amount, category, date?, paymentMethod?, confidence?)
+  final (String, double, String, String?, String?, double?)? extractedData;
 
   const AddExpenseManuallyScreen({super.key, this.extractedData});
 
@@ -54,16 +54,42 @@ class _AddExpenseManuallyScreenState extends State<AddExpenseManuallyScreen> {
 
     // Pre-fill fields if data was passed
     if (widget.extractedData != null) {
-      final (merchant, amount, category) = widget.extractedData!;
+      final (merchant, amount, category, date, paymentMethod, confidence) = widget.extractedData!;
       _merchantController.text = merchant;
       _amountController.text = amount.toStringAsFixed(2);
       _categoryController.text = category;
+      
+      // Set payment method if provided
+      if (paymentMethod != null) {
+        _paymentType = paymentMethod;
+      }
+      
+      // Set date if provided
+      if (date != null) {
+        try {
+          _selectedDate = DateTime.parse(date);
+        } catch (e) {
+          // Keep default date if parsing fails
+        }
+      }
+      
       // try to find emoji for that category
       final match = _categories.firstWhere(
             (c) => c["label"]!.toLowerCase() == category.toLowerCase(),
         orElse: () => {},
       );
       if (match.isNotEmpty) _selectedCategoryEmoji = match["emoji"];
+      
+      // Show confidence if available
+      if (confidence != null && confidence < 0.8) {
+        // Show warning for low confidence
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          SnackBarUtils.showWarning(
+            context, 
+            'AI confidence: ${(confidence * 100).toStringAsFixed(0)}% - Please verify the extracted data'
+          );
+        });
+      }
     }
 
     _dateController.text = DateFormat('MMM dd, yyyy').format(_selectedDate);

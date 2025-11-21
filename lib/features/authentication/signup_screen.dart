@@ -113,6 +113,27 @@ class _SignUpScreenState extends State<SignUpScreen> {
     });
   }
 
+  void _createDemoUser() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    
+    // Show loading
+    setState(() {});
+    
+    // Create demo user
+    await authProvider.signUp('demo@expenselogger.com', 'Demo123!');
+    
+    if (mounted && authProvider.errorMessage != null) {
+      SnackBarUtils.showError(context, authProvider.errorMessage!);
+      authProvider.clearError();
+    } else if (mounted) {
+      SnackBarUtils.showSuccess(context, 'Demo user created successfully!');
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const DashboardScreen()),
+        (route) => false,
+      );
+    }
+  }
+
   Future<void> _submit() async {
     // --- Check for terms and conditions first ---
     if (!_termsAccepted) {
@@ -300,6 +321,26 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       child: CircularProgressIndicator(
                           color: AppColors.primaryColor))
                       : AuthButton(onPressed: _submit, text: 'Sign Up'),
+                  const SizedBox(height: 12),
+                  // Create Demo User Button
+                  OutlinedButton(
+                    onPressed: authProvider.isLoading ? null : _createDemoUser,
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      side: const BorderSide(color: AppColors.primaryColor),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12.0),
+                      ),
+                    ),
+                    child: const Text(
+                      '🎯 Create Demo User',
+                      style: TextStyle(
+                        color: AppColors.primaryColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 20),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,

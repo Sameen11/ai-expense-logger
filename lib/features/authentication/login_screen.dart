@@ -30,10 +30,27 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _termsAccepted = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Set default demo credentials
+    _emailController.text = 'demo@expenselogger.com';
+    _passwordController.text = 'demo123';
+    _termsAccepted = true; // Auto-accept terms for demo
+  }
+
+  @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  void _fillDemoCredentials() {
+    setState(() {
+      _emailController.text = 'demo@expenselogger.com';
+      _passwordController.text = 'demo123';
+      _termsAccepted = true;
+    });
   }
 
   Future<void> _submit() async {
@@ -194,6 +211,26 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: CircularProgressIndicator(
                           color: AppColors.primaryColor))
                       : AuthButton(onPressed: _submit, text: 'Login'),
+                  const SizedBox(height: 12),
+                  // Demo Login Button
+                  OutlinedButton(
+                    onPressed: _fillDemoCredentials,
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      side: const BorderSide(color: AppColors.primaryColor),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12.0),
+                      ),
+                    ),
+                    child: const Text(
+                      '🚀 Use Demo Credentials',
+                      style: TextStyle(
+                        color: AppColors.primaryColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 20),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,

@@ -22,7 +22,15 @@ void main() async {
   //    google-services.json and GoogleService-Info.plist files you added.
   await Firebase.initializeApp();
 
-  // 3. Run the application.
+  // 3. Ensure demo user exists for easy testing
+  try {
+    final authService = AuthService();
+    await authService.ensureDemoUserExists();
+  } catch (e) {
+    print('Error ensuring demo user: $e');
+  }
+
+  // 4. Run the application.
   runApp(const MyApp());
 }
 

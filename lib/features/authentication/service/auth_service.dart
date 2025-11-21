@@ -72,6 +72,48 @@ class AuthService {
     await _firebaseAuth.signOut();
   }
 
+  // Check if demo user exists, if not create it
+  Future<bool> ensureDemoUserExists() async {
+    const demoEmail = 'demo@expenselogger.com';
+    const demoPassword = 'demo123';
+    
+    try {
+      // Try to sign in with demo credentials
+      await _firebaseAuth.signInWithEmailAndPassword(
+        email: demoEmail,
+        password: demoPassword,
+      );
+      // If successful, demo user exists
+      await _firebaseAuth.signOut(); // Sign out immediately
+      return true;
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'user-not-found') {
+        // Demo user doesn't exist, create it
+        try {
+          final userCredential = await _firebaseAuth.createUserWithEmailAndPassword(
+            email: demoEmail,
+            password: demoPassword,
+          );
+          
+          // Update display name
+          await userCredential.user?.updateDisplayName('Demo User');
+          
+          // Create Firestore document
+          if (userCredential.user != null) {
+            await _firestoreService.createUserDocument(userCredential.user!);
+          }
+          
+          await _firebaseAuth.signOut(); // Sign out immediately
+          return true;
+        } catch (createError) {
+          print('Error creating demo user: $createError');
+          return false;
+        }
+      }
+      return false;
+    }
+  }
+
   /// Updates the user's profile in both Firebase Auth and Firestore.
   ///
   /// Throws an error if the update fails.
