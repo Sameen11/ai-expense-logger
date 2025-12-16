@@ -91,9 +91,13 @@ class _CustomDatePickerDialogState extends State<_CustomDatePickerDialog> {
                 });
               },
               onPageChanged: (focusedDay) {
-                // --- UPDATED: Keep focused day in sync with page changes ---
+                // --- UPDATED: Keep focused day in sync with page changes and update selected day to first of month ---
                 setState(() {
                   _focusedDay = focusedDay;
+                  // If user navigates to a different month, update selected day to first of that month
+                  if (_focusedDay.year != _selectedDay.year || _focusedDay.month != _selectedDay.month) {
+                    _selectedDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
+                  }
                 });
               },
               // Style
@@ -149,7 +153,7 @@ class _CustomDatePickerDialogState extends State<_CustomDatePickerDialog> {
                       ),
                     ),
                     child: const Text('OK', style: TextStyle(color: Colors.white)),
-                    // --- UPDATED: Return the selected/focused day ---
+                    // --- UPDATED: Return the focused day (month being viewed) if no day explicitly selected, otherwise return selected day ---
                     onPressed: () => Navigator.pop(context, _selectedDay),
                   ),
                 ],

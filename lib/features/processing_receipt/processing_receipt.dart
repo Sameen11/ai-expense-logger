@@ -68,19 +68,12 @@ class _ProcessingReceiptScreenState extends State<ProcessingReceiptScreen> {
       await Future.delayed(const Duration(milliseconds: 500));
 
       if (receiptData != null && mounted) {
-        // Navigate to manual entry screen with extracted data
+        // Navigate to manual entry screen with full ReceiptData
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
             builder: (context) => AddExpenseManuallyScreen(
-              extractedData: (
-                receiptData.merchantName,
-                receiptData.totalAmount,
-                receiptData.category,
-                receiptData.date,
-                receiptData.paymentMethod ?? 'Credit Card',
-                receiptData.confidence,
-              ),
+              receiptData: receiptData,
             ),
           ),
         );

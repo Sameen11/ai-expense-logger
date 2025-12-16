@@ -6,6 +6,7 @@ import '../../common/colors.dart';
 import '../../models/expense.dart';
 import '../../navigation/nav_manager.dart';
 import '../../providers/expense_provider.dart';
+import '../../utils/currency_utils.dart';
 import '../../widgets/data_picker_dialog.dart';
 import '../snap/add_expense.dart';
 import 'expense_detail.dart';
@@ -58,7 +59,7 @@ class _ExpensesViewState extends State<ExpensesView> {
       controller: _searchController,
       autofocus: true,
       decoration: InputDecoration(
-        hintText: 'Search merchant, category...',
+        hintText: 'Search merchant, amount, items...',
         border: InputBorder.none,
         hintStyle: TextStyle(color: Colors.grey[600]),
       ),
@@ -74,18 +75,31 @@ class _ExpensesViewState extends State<ExpensesView> {
   Widget _buildTitle(BuildContext context, DateTime selectedMonth) {
     return InkWell(
       onTap: () => _selectMonth(context), // This now calls the updated function
-      child: Row(
+      child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                DateFormat('MMMM yyyy').format(selectedMonth),
+                style: TextStyle(
+                  color: Colors.grey[800],
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
+              Icon(Icons.arrow_drop_down, color: Colors.grey[800]),
+            ],
+          ),
           Text(
-            DateFormat('MMMM yyyy').format(selectedMonth),
+            'by Added Date',
             style: TextStyle(
-              color: Colors.grey[800],
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
+              color: Colors.grey[500],
+              fontSize: 10,
+              fontWeight: FontWeight.normal,
             ),
           ),
-          Icon(Icons.arrow_drop_down, color: Colors.grey[800]),
         ],
       ),
     );
@@ -116,11 +130,33 @@ class _ExpensesViewState extends State<ExpensesView> {
 
         final List<Expense> filteredExpenses;
         if (_isSearching && _searchQuery.isNotEmpty) {
-          final query = _searchQuery.toLowerCase();
+          final query = _searchQuery.toLowerCase().trim();
           filteredExpenses = expensesForMonth.where((e) {
-            final merchant = e.merchant.toLowerCase();
-            final category = e.category.toLowerCase();
-            return merchant.contains(query) || category.contains(query);
+            // Search in merchant name
+            if (e.merchant.toLowerCase().contains(query)) return true;
+            
+            // Search in category
+            if (e.category.toLowerCase().contains(query)) return true;
+            
+            // Search in amount (exact match or partial)
+            final amountStr = e.amount.toStringAsFixed(2);
+            if (amountStr.contains(query) || query.contains(amountStr)) return true;
+            
+            // Search in notes
+            if (e.notes != null && e.notes!.toLowerCase().contains(query)) return true;
+            
+            // Search in invoice number
+            if (e.invoiceNumber != null && e.invoiceNumber!.toLowerCase().contains(query)) return true;
+            
+            // Search in receipt items
+            if (e.items != null) {
+              for (var item in e.items!) {
+                final itemName = (item['name'] as String? ?? '').toLowerCase();
+                if (itemName.contains(query)) return true;
+              }
+            }
+            
+            return false;
           }).toList();
         } else {
           filteredExpenses = expensesForMonth;
@@ -129,13 +165,16 @@ class _ExpensesViewState extends State<ExpensesView> {
         final now = DateTime.now();
         final yesterday = now.subtract(const Duration(days: 1));
 
+        // Group by Added On date (createdAt) instead of Receipt Date
         final List<Expense> todayExpenses =
-        filteredExpenses.where((e) => _isSameDay(e.date, now)).toList();
+        filteredExpenses.where((e) => _isSameDay(e.createdAt.toDate(), now)).toList();
         final List<Expense> yesterdayExpenses =
-        filteredExpenses.where((e) => _isSameDay(e.date, yesterday)).toList();
+        filteredExpenses.where((e) => _isSameDay(e.createdAt.toDate(), yesterday)).toList();
         final List<Expense> olderExpenses = filteredExpenses
-            .where((e) =>
-        e.date.isBefore(yesterday) && !_isSameDay(e.date, yesterday))
+            .where((e) {
+              final addedDate = e.createdAt.toDate();
+              return addedDate.isBefore(yesterday) && !_isSameDay(addedDate, yesterday);
+            })
             .toList();
 
         return Scaffold(
@@ -195,14 +234,43 @@ class _ExpensesViewState extends State<ExpensesView> {
                             ),
                           ),
                           const SizedBox(height: 8),
-                          Text(
-                            NumberFormat.currency(symbol: '\$').format(totalSpent),
-                            style: TextStyle(
-                              color: Colors.grey[900],
-                              fontSize: 40,
-                              fontWeight: FontWeight.bold,
+                          if (provider.totalSpentByCurrency.length <= 1)
+                            Text(
+                              expensesForMonth.isNotEmpty 
+                                  ? CurrencyUtils.formatAmount(totalSpent, expensesForMonth.first.currency)
+                                  : CurrencyUtils.formatAmount(totalSpent, 'USD'),
+                              style: TextStyle(
+                                color: Colors.grey[900],
+                                fontSize: 40,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            )
+                          else
+                            SizedBox(
+                              height: 50,
+                              child: ListView.builder(
+                                scrollDirection: Axis.horizontal,
+                                shrinkWrap: true,
+                                physics: const BouncingScrollPhysics(),
+                                itemCount: provider.totalSpentByCurrency.length,
+                                itemBuilder: (context, index) {
+                                  final entry = provider.totalSpentByCurrency.entries.elementAt(index);
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                    child: Center(
+                                      child: Text(
+                                        CurrencyUtils.formatAmount(entry.value, entry.key),
+                                        style: TextStyle(
+                                          color: Colors.grey[900],
+                                          fontSize: 32,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
                             ),
-                          ),
                         ],
                       ),
                     ),
@@ -323,6 +391,44 @@ class _ExpenseListItem extends StatelessWidget {
     required this.expense,
   });
 
+  // Helper function to get emoji for expense with fallback
+  String _getEmojiForExpense(Expense expense) {
+    // Check if emoji is valid (not null, not empty, and not just whitespace)
+    if (expense.emoji != null && expense.emoji!.trim().isNotEmpty) {
+      // Check if it's a valid emoji (not a single character that might be a cross)
+      final emoji = expense.emoji!.trim();
+      // If it's a valid emoji string, return it
+      if (emoji.length > 0 && emoji != '×' && emoji != '✕' && emoji != '✖' && emoji != 'X' && emoji != 'x') {
+        return emoji;
+      }
+    }
+    
+    // Fallback to category-based emoji
+    final categoryEmojiMap = {
+      'Food & Drinks': '🍔',
+      'Groceries': '🛒',
+      'Transport': '🚌',
+      'Shopping': '🛍',
+      'Subscriptions': '📺',
+      'Bills & Utilities': '💡',
+      'Salary': '💼',
+      'Business': '🏢',
+      'Investments': '📈',
+      'Health': '❤️',
+      'Entertainment': '🎬',
+      'Travel': '✈️',
+      'Other': '📦',
+    };
+    
+    final categoryEmoji = categoryEmojiMap[expense.category];
+    if (categoryEmoji != null) {
+      return categoryEmoji;
+    }
+    
+    // Final fallback
+    return '📦';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -340,7 +446,7 @@ class _ExpenseListItem extends StatelessWidget {
           ),
           child: Center(
             child: Text(
-              expense.emoji ?? "📦",
+              _getEmojiForExpense(expense),
               style: const TextStyle(fontSize: 22),
             ),
           ),
@@ -354,14 +460,16 @@ class _ExpenseListItem extends StatelessWidget {
           ),
         ),
         subtitle: Text(
-          expense.category,
+          (expense.date.hour != 0 || expense.date.minute != 0)
+              ? "${expense.category} • ${DateFormat('h:mm a').format(expense.date)}"
+              : expense.category,
           style: TextStyle(
             color: Colors.grey[700],
             fontSize: 13,
           ),
         ),
         trailing: Text(
-          NumberFormat.currency(symbol: '\$').format(expense.amount),
+          CurrencyUtils.formatAmount(expense.amount, expense.currency),
           style: TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 16,

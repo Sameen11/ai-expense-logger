@@ -65,6 +65,13 @@ class ExpenseProvider with ChangeNotifier {
     required String category,
     required String emoji,
     String? notes,
+    String currency = 'USD', // Default to USD
+    List<Map<String, dynamic>>? items,
+    double? subtotal,
+    double? tax,
+    double? tip,
+    double? discount,
+    String? invoiceNumber,
   }) async {
     if (_currentUid == null) {
       _setError("User not logged in");
@@ -81,8 +88,20 @@ class ExpenseProvider with ChangeNotifier {
         notes: notes,
         createdAt: Timestamp.now(), // Set creation time
         emoji: emoji,
+        currency: currency, // Pass currency
+        items: items,
+        subtotal: subtotal,
+        tax: tax,
+        tip: tip,
+        discount: discount,
+        invoiceNumber: invoiceNumber,
       );
       await _expenseService.addExpense(_currentUid!, newExpense);
+      
+      // Switch view to the current month (when expense was added) so the user sees it immediately
+      final now = DateTime.now();
+      updateSelectedMonth(DateTime(now.year, now.month));
+      
     } catch (e) {
       _setError(e.toString());
     } finally {
@@ -106,22 +125,56 @@ class ExpenseProvider with ChangeNotifier {
       _setLoading(false);
     }
   }
-  /// Filters the main list to only expenses in the selected month
+  /// Filters the main list to only expenses in the selected month (by Added On date)
   List<Expense> get expensesForSelectedMonth {
     return _expenses
-        .where((e) =>
-    e.date.year == _selectedMonth.year &&
-        e.date.month == _selectedMonth.month)
+        .where((e) {
+          final addedDate = e.createdAt.toDate();
+          return addedDate.year == _selectedMonth.year &&
+                 addedDate.month == _selectedMonth.month;
+        })
         .toList();
   }
 
-  /// Calculates the total spending for the selected month
-  double get totalSpentForSelectedMonth {
-    return expensesForSelectedMonth.fold(0.0, (sum, e) => sum + e.amount);
+  /// Calculates the total spending for the selected month per currency
+  Map<String, double> get totalSpentByCurrency {
+    var totals = <String, double>{};
+    for (var expense in expensesForSelectedMonth) {
+      totals.update(
+        expense.currency,
+        (value) => value + expense.amount,
+        ifAbsent: () => expense.amount,
+      );
+    }
+    // Sort by amount descending (optional)
+    return totals;
   }
 
-  /// Groups all expenses by category and sums their amounts
+  /// Groups all expenses by category and sums their amounts for a specific currency
+  Map<String, double> getCategorySpending(String currency) {
+    var categoryTotals = <String, double>{};
+    for (var expense in expensesForSelectedMonth.where((e) => e.currency == currency)) {
+      categoryTotals.update(
+        expense.category,
+        (value) => value + expense.amount,
+        ifAbsent: () => expense.amount,
+      );
+    }
+    return categoryTotals;
+  }
+
+  /// Legacy getter - returns USD total or first currency total (for backward compatibility if needed)
+  double get totalSpentForSelectedMonth {
+    if (expensesForSelectedMonth.isEmpty) return 0.0;
+    // This is technically misleading if mixed currencies exist, but keeps existing calls safe
+    // Ideally, UI should switch to totalSpentByCurrency
+    return expensesForSelectedMonth.fold(0.0, (sum, e) => sum + e.amount); 
+  }
+
+  /// Groups all expenses by category and sums their amounts (Legacy - sums distinct currencies!)
   Map<String, double> get spendingByCategory {
+    // WARNING: This sums amounts of potentially different currencies.
+    // Use getCategorySpending(currency) instead.
     var categoryTotals = <String, double>{};
     for (var expense in expensesForSelectedMonth) {
       categoryTotals.update(
@@ -146,7 +199,7 @@ class ExpenseProvider with ChangeNotifier {
     return totalSpentForSelectedMonth / daysInMonth;
   }
 
-  /// Finds the merchant with the most transactions
+  /// Finds the merchant with the most transactions (Legacy - all currencies)
   String get topMerchant {
     if (expensesForSelectedMonth.isEmpty) return "N/A";
 
@@ -164,6 +217,40 @@ class ExpenseProvider with ChangeNotifier {
     return "${top.key} (${top.value}x)";
   }
 
+  /// Gets top merchants by receipt count for a specific currency
+  List<MapEntry<String, int>> getTopMerchantsByCount(String currency, {int limit = 5}) {
+    var merchantCounts = <String, int>{};
+    for (var expense in expensesForSelectedMonth.where((e) => e.currency == currency)) {
+      merchantCounts.update(
+        expense.merchant,
+        (value) => value + 1,
+        ifAbsent: () => 1,
+      );
+    }
+    
+    final sorted = merchantCounts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    
+    return sorted.take(limit).toList();
+  }
+
+  /// Gets top merchants by total amount for a specific currency
+  List<MapEntry<String, double>> getTopMerchantsByAmount(String currency, {int limit = 5}) {
+    var merchantAmounts = <String, double>{};
+    for (var expense in expensesForSelectedMonth.where((e) => e.currency == currency)) {
+      merchantAmounts.update(
+        expense.merchant,
+        (value) => value + expense.amount,
+        ifAbsent: () => expense.amount,
+      );
+    }
+    
+    final sorted = merchantAmounts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    
+    return sorted.take(limit).toList();
+  }
+
   // List of colors for the pie chart slices
   final List<Color> _pieChartColors = [
     Colors.blue[600]!,
@@ -178,48 +265,49 @@ class ExpenseProvider with ChangeNotifier {
     Colors.cyan[600]!,
   ];
 
-  /// Prepares data for the pie chart, including percentages and colors
-  List<PieChartSectionData> get pieChartData {
-    if (totalSpentForSelectedMonth == 0) return [];
+  /// Prepares data for the pie chart, including percentages and colors for a specific currency
+  List<PieChartSectionData> getPieChartData(String currency) {
+    final categorySpending = getCategorySpending(currency);
+    final total = categorySpending.values.fold(0.0, (sum, val) => sum + val);
+    
+    if (total == 0) return [];
 
-    final categorySpending = spendingByCategory;
     final sortedCategories = categorySpending.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value)); // Sort by amount descending
 
     List<PieChartSectionData> sections = [];
-    double startDegree = 0; // For ensuring sections don't overlap visually if data is very small
 
     for (int i = 0; i < sortedCategories.length; i++) {
       final entry = sortedCategories[i];
-      final categoryName = entry.key;
       final amount = entry.value;
-      final percentage = (amount / totalSpentForSelectedMonth) * 100;
-
-      // Skip very small slices if they would be invisible or ugly
-      if (percentage < 3 && sortedCategories.length > 5) { // Threshold for "other" or grouping
-        // You might group these into an "Other" category,
-        // but for now, we'll just show them if they pass a minimum size, or individually if few categories.
-      }
+      final percentage = (amount / total) * 100;
 
       sections.add(
         PieChartSectionData(
           color: _pieChartColors[i % _pieChartColors.length],
-          value: amount, // Use raw amount for value, fl_chart will calculate sizes
+          value: amount, 
           title: '${percentage.toStringAsFixed(0)}%',
-          radius: 50, // Size of the slice
+          radius: 50, 
           titleStyle: const TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.bold,
             color: Colors.white,
             shadows: [
-              Shadow(color: Colors.black, blurRadius: 2) // For readability
+              Shadow(color: Colors.black, blurRadius: 2) 
             ],
           ),
-          showTitle: percentage > 8, // Only show title for larger slices
+          showTitle: percentage > 8, 
         ),
       );
     }
     return sections;
+  }
+
+  // Legacy getter
+  List<PieChartSectionData> get pieChartData {
+    if (expensesForSelectedMonth.isEmpty) return [];
+    final currency = expensesForSelectedMonth.first.currency;
+    return getPieChartData(currency);
   }
 
   // --- Private Setters for State ---

@@ -21,6 +21,7 @@ class _SnapViewState extends State<SnapView> with WidgetsBindingObserver {
   CameraController? _controller;
   Future<void>? _initializeControllerFuture;
   bool _isShutterPressed = false; // State for shutter animation
+  bool _isDisposing = false; // Flag to prevent operations during disposal
 
   // --- ADDED: Instantiate the service ---
   final FilePickerService _filePickerService = FilePickerService();
@@ -37,29 +38,74 @@ class _SnapViewState extends State<SnapView> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
 
+    if (_isDisposing) return; // Don't handle lifecycle during disposal
+
     if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
       // App is backgrounded or hidden.
       // Dispose the controller to release the camera hardware completely.
-      if (_controller != null) {
-        _controller!.dispose();
-        _controller = null;
-        _initializeControllerFuture = null;
-        // Set state to show loading spinner when we come back
-        if (mounted) {
-          setState(() {});
-        }
-      }
+      _disposeCamera();
     } else if (state == AppLifecycleState.resumed) {
       // App is foregrounded.
       // Re-initialize the camera if it's not already initializing.
-      if (_controller == null && _initializeControllerFuture == null) {
+      if (_controller == null && _initializeControllerFuture == null && !_isDisposing) {
         _initializeCamera(); // This will set the future and call setState
+      }
+    }
+  }
+
+  // Helper method to safely dispose camera
+  Future<void> _disposeCamera() async {
+    if (_isDisposing || _controller == null) return;
+    
+    _isDisposing = true;
+    final controller = _controller;
+    _controller = null; // Set to null immediately to prevent access
+    _initializeControllerFuture = null;
+    
+    try {
+      // Wait longer to let any ongoing observer callbacks finish
+      await Future.delayed(const Duration(milliseconds: 300));
+      
+      if (controller != null) {
+        try {
+          // Check if controller is still initialized before disposing
+          if (controller.value.isInitialized) {
+            // Use a shorter timeout and catch all errors
+            await controller.dispose().timeout(
+              const Duration(seconds: 1),
+              onTimeout: () {
+                // Timeout is okay, just continue
+              },
+            ).catchError((e) {
+              // Ignore all disposal errors - they're often observer-related
+              print('Camera disposal error (ignored): $e');
+            });
+          }
+        } catch (e) {
+          // Ignore disposal errors - they're often observer-related
+          print('Camera disposal error (ignored): $e');
+        }
+      }
+    } catch (e) {
+      // Ignore any errors during disposal
+      print('Camera disposal error (ignored): $e');
+    } finally {
+      _isDisposing = false;
+      
+      // Set state to show loading spinner when we come back
+      if (mounted) {
+        setState(() {});
       }
     }
   }
 
   // ... (_initializeCamera remains the same) ...
   Future<void> _initializeCamera() async {
+    // Don't initialize if already initializing, disposing, or disposed
+    if (_initializeControllerFuture != null || !mounted || _isDisposing) {
+      return;
+    }
+
     // 1. Ensure 'cameras' list is populated
     try {
       if (cameras.isEmpty) {
@@ -67,10 +113,17 @@ class _SnapViewState extends State<SnapView> with WidgetsBindingObserver {
       }
 
       // 2. Select the first camera (usually the back camera)
-      if (cameras.isNotEmpty) {
+      if (cameras.isNotEmpty && mounted) {
         final firstCamera = cameras.first;
 
-        // Cleaned up: No need to dispose here, lifecycle handles it
+        // Dispose old controller if exists
+        if (_controller != null) {
+          await _disposeCamera();
+          // Wait a bit after disposal before creating new controller
+          await Future.delayed(const Duration(milliseconds: 200));
+        }
+
+        // Create new controller
         _controller = CameraController(
           firstCamera,
           // *** OPTIMIZATION: Use 'medium' for much faster preview startup ***
@@ -79,12 +132,20 @@ class _SnapViewState extends State<SnapView> with WidgetsBindingObserver {
         );
 
         // 3. Initialize the controller
-        _initializeControllerFuture = _controller!.initialize();
-
-        // 4. Rebuild the widget once initialized
-        if (mounted) {
-          setState(() {});
-        }
+        _initializeControllerFuture = _controller!.initialize().then((_) {
+          if (mounted) {
+            setState(() {});
+          }
+        }).catchError((e) {
+          // Handle initialization errors
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Error initializing camera: $e')),
+            );
+          }
+          _controller = null;
+          _initializeControllerFuture = null;
+        });
       } else {
         // Handle case where no cameras are available
         if (mounted) {
@@ -100,38 +161,64 @@ class _SnapViewState extends State<SnapView> with WidgetsBindingObserver {
           SnackBar(content: Text('Error initializing camera: $e')),
         );
       }
+      _controller = null;
+      _initializeControllerFuture = null;
     }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _controller?.dispose(); // Dispose one last time
+    // Properly dispose camera controller (fire and forget)
+    _isDisposing = true;
+    if (_controller != null) {
+      final controller = _controller;
+      _controller = null;
+      _initializeControllerFuture = null;
+      
+      // Dispose asynchronously but don't wait
+      controller!.dispose().timeout(
+        const Duration(seconds: 1),
+        onTimeout: () {},
+      ).catchError((e) {
+        // Ignore disposal errors
+      });
+    }
     super.dispose();
   }
 
   // ... (_onTakePicturePressed remains the same) ...
   void _onTakePicturePressed() async {
-    // ... (This function remains the same as before)
-    if (_controller == null || !_controller!.value.isInitialized) return;
+    if (_isDisposing || _controller == null) return;
+    
+    try {
+      if (!_controller!.value.isInitialized) return;
+    } catch (e) {
+      return; // Controller is in bad state
+    }
 
-    setState(() {
-      _isShutterPressed = true;
-    });
+    if (mounted && !_isDisposing) {
+      setState(() {
+        _isShutterPressed = true;
+      });
+    }
 
     try {
       await _initializeControllerFuture;
+      
+      if (_isDisposing || _controller == null) return;
+      
       final image = await _controller!.takePicture();
 
-      if (mounted) {
+      if (mounted && !_isDisposing) {
         NavigationManager.push(
           context,
           ProcessingReceiptScreen(imagePath: image.path),
-          type: TransitionType.slideFromBottom, // A modal slide is nice here
+          type: TransitionType.slideFromBottom,
         );
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && !_isDisposing) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error taking picture: $e')),
         );
@@ -139,7 +226,7 @@ class _SnapViewState extends State<SnapView> with WidgetsBindingObserver {
     }
 
     // We might not come back here, but reset if we do
-    if (mounted) {
+    if (mounted && !_isDisposing) {
       setState(() {
         _isShutterPressed = false;
       });
@@ -171,13 +258,19 @@ class _SnapViewState extends State<SnapView> with WidgetsBindingObserver {
 
   // ... (_toggleFlash remains the same) ...
   void _toggleFlash() {
-    // ... (This function remains the same as before)
     HapticFeedback.lightImpact();
-    if (_controller == null || !_controller!.value.isInitialized) return;
-
-    final bool isFlashOn = _controller!.value.flashMode == FlashMode.torch;
-    _controller!.setFlashMode(isFlashOn ? FlashMode.off : FlashMode.torch);
-    setState(() {});
+    if (_isDisposing || _controller == null) return;
+    
+    try {
+      if (!_controller!.value.isInitialized) return;
+      final bool isFlashOn = _controller!.value.flashMode == FlashMode.torch;
+      _controller!.setFlashMode(isFlashOn ? FlashMode.off : FlashMode.torch);
+      if (mounted && !_isDisposing) {
+        setState(() {});
+      }
+    } catch (e) {
+      // Ignore errors - controller might be disposing
+    }
   }
 
   // --- UPDATED ---
@@ -268,10 +361,19 @@ class _SnapViewState extends State<SnapView> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    // Determine the flash icon
-    final IconData flashIcon = _controller?.value.flashMode == FlashMode.torch
-        ? Icons.flash_on
-        : Icons.flash_off_outlined;
+    // Determine the flash icon - safely check controller state
+    IconData flashIcon = Icons.flash_off_outlined;
+    if (!_isDisposing && _controller != null) {
+      try {
+        if (_controller!.value.isInitialized) {
+          flashIcon = _controller!.value.flashMode == FlashMode.torch
+              ? Icons.flash_on
+              : Icons.flash_off_outlined;
+        }
+      } catch (e) {
+        // Ignore errors accessing controller value
+      }
+    }
 
     return Scaffold(
       backgroundColor: Colors.black54,
@@ -334,8 +436,43 @@ class _SnapViewState extends State<SnapView> with WidgetsBindingObserver {
                     child: CircularProgressIndicator(color: Colors.white));
               }
 
-              // When done, show the preview
-              return CameraPreview(_controller!);
+              // When done, show the preview with error handling
+              if (_isDisposing || _controller == null) {
+                return const Center(
+                  child: CircularProgressIndicator(color: Colors.white),
+                );
+              }
+              
+              try {
+                // Double-check controller state before showing preview
+                if (_controller!.value.isInitialized) {
+                  return CameraPreview(_controller!);
+                } else {
+                  return const Center(
+                    child: CircularProgressIndicator(color: Colors.white),
+                  );
+                }
+              } catch (e) {
+                // If preview fails, show error message
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.camera_alt, color: Colors.white, size: 48),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Camera preview error',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      const SizedBox(height: 8),
+                      ElevatedButton(
+                        onPressed: _isDisposing ? null : _initializeCamera,
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                );
+              }
             },
           ),
         ),

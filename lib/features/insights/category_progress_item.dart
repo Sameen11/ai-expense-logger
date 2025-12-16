@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import '../../utils/currency_utils.dart';
 
 class CategoryProgressItem extends StatelessWidget {
   final IconData icon;
@@ -7,6 +7,7 @@ class CategoryProgressItem extends StatelessWidget {
   final double amount;
   final double percentage;
   final Color color;
+  final String currency; // Add currency
 
   const CategoryProgressItem({
     super.key,
@@ -15,6 +16,7 @@ class CategoryProgressItem extends StatelessWidget {
     required this.amount,
     required this.percentage,
     required this.color,
+    this.currency = 'USD', // Default
   });
 
   @override
@@ -44,7 +46,7 @@ class CategoryProgressItem extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    NumberFormat.currency(symbol: '\$').format(amount),
+                    CurrencyUtils.formatAmount(amount, currency),
                     style: TextStyle(
                       color: Colors.grey[900],
                       fontWeight: FontWeight.bold,

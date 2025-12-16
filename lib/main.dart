@@ -16,6 +16,23 @@ import 'providers/category_provider.dart';
 void main() async {
   // 1. Ensure that Flutter's internal bindings are initialized before any plugins.
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Catch and handle Flutter errors (especially camera plugin observer errors)
+  FlutterError.onError = (FlutterErrorDetails details) {
+    // Check if it's a camera-related error that we can safely ignore
+    final errorString = details.exception.toString();
+    if (errorString.contains('ObserverProxyApi') || 
+        errorString.contains('ObserverImpl') ||
+        errorString.contains('CameraX')) {
+      // Log but don't crash - these are known camera plugin issues
+      print('Camera plugin observer error (ignored): ${details.exception}');
+      return;
+    }
+    
+    // For other errors, use the default handler
+    FlutterError.presentError(details);
+  };
+  
   await SharedPrefService.init(); // initialize once
 
   // 2. Initialize Firebase. This will automatically use the

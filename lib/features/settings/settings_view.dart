@@ -41,14 +41,28 @@ class _SettingsViewState extends State<SettingsView> {
 
       final monthName = DateFormat('yyyy-MM').format(expenseProvider.selectedMonth);
 
+      // Show progress message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Exporting ${expenses.length} expenses to ${format.name.toUpperCase()}...'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+
       // Call the single export service
       await ExportService().exportExpenses(expenses, monthName, format);
 
       // Show success (optional)
-      SnackBarUtils.showSuccess(context, 'Successfully exported to ${format.name.toUpperCase()}!');
+      if (mounted) {
+        SnackBarUtils.showSuccess(context, 'Successfully exported to ${format.name.toUpperCase()}!');
+      }
     } catch (e) {
       // Show error
-      SnackBarUtils.showError(context, 'Error exporting file: ${e.toString()}');
+      if (mounted) {
+        SnackBarUtils.showError(context, 'Error exporting file: ${e.toString()}');
+      }
     }
   }
   @override
