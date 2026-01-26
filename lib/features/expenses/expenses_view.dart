@@ -70,6 +70,58 @@ class _ExpensesViewState extends State<ExpensesView> {
     );
   }
 
+  String _selectedCategory = 'All';
+
+  // ... existing code ...
+
+  Widget _buildCategoryFilter() {
+    final theme = Theme.of(context);
+    final provider = context.watch<ExpenseProvider>();
+    final expenses = provider.expensesForSelectedMonth;
+
+    // Get unique categories from actual expenses in the current month
+    // Plus "All" at the beginning
+    final categories = [
+      'All',
+      ...expenses.map((e) => e.category).toSet().toList()..sort(),
+    ];
+
+    return Container(
+      height: 50,
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        scrollDirection: Axis.horizontal,
+        itemCount: categories.length,
+        separatorBuilder: (context, index) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final cat = categories[index];
+          final isSelected = _selectedCategory == cat;
+          return ChoiceChip(
+            label: Text(cat),
+            selected: isSelected,
+            onSelected: (selected) {
+              setState(() {
+                _selectedCategory = selected ? cat : 'All';
+              });
+            },
+            selectedColor: theme.colorScheme.primaryContainer,
+            labelStyle: TextStyle(
+              color: isSelected
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurface,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            ),
+            backgroundColor: theme.cardColor,
+            side: isSelected
+                ? BorderSide(color: theme.colorScheme.primary, width: 1)
+                : BorderSide(color: theme.dividerColor.withOpacity(0.1)),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -120,25 +172,33 @@ class _ExpensesViewState extends State<ExpensesView> {
               ),
             ],
             bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(1.0),
-              child: Container(
-                color: theme.dividerColor.withOpacity(0.1),
-                height: 1.0,
+              preferredSize: const Size.fromHeight(
+                50.0,
+              ), // Increased height for filter
+              child: Column(
+                children: [
+                  if (!_isSearching) _buildCategoryFilter(),
+                  Container(
+                    color: theme.dividerColor.withOpacity(0.1),
+                    height: 1.0,
+                  ),
+                ],
               ),
             ),
           ),
           body: Column(
             children: [
-              // The "Total Spent" section that was previously in FlexibleSpaceBar
-              // Quick Actions Row
-              _buildQuickActions(context),
+              // Removed Quick Actions Row as requested
 
               // The main List
               Expanded(
                 child: filteredExpenses.isEmpty
                     ? _buildEmptyState()
                     : ListView.builder(
-                        padding: const EdgeInsets.only(bottom: 100),
+                        padding: const EdgeInsets.only(
+                          bottom: 100,
+                          top: 10,
+                        ), // Add top padding
                         itemCount: flatList.length,
                         itemBuilder: (context, index) {
                           final item = flatList[index];
@@ -169,86 +229,6 @@ class _ExpensesViewState extends State<ExpensesView> {
           ),
         );
       },
-    );
-  }
-
-  Widget _buildQuickActions(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 20.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          _buildQuickActionButton(
-            context,
-            icon: Icons.qr_code_scanner_rounded,
-            label: 'Scan',
-            color: const Color(0xFF007AFF), // Blue
-            onTap: () => NavigationManager.push(context, const SnapView()),
-          ),
-          _buildQuickActionButton(
-            context,
-            icon: Icons.add_rounded,
-            label: 'Add',
-            color: const Color(0xFF34C759), // Green
-            onTap: () => NavigationManager.push(
-              context,
-              const AddExpenseManuallyScreen(),
-              type: TransitionType.platform,
-            ),
-          ),
-          _buildQuickActionButton(
-            context,
-            icon: Icons.bar_chart_rounded,
-            label: 'Insights',
-            color: const Color(0xFF5856D6), // Purple
-            onTap: () => NavigationManager.push(context, const InsightsView()),
-          ),
-          _buildQuickActionButton(
-            context,
-            icon: Icons.settings_rounded,
-            label: 'Settings',
-            color: const Color(0xFFFF9500), // Orange
-            onTap: () => NavigationManager.push(context, const SettingsView()),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildQuickActionButton(
-    BuildContext context, {
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    final theme = Theme.of(context);
-    return Column(
-      children: [
-        InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
-          child: Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(20),
-              // border: Border.all(color: color.withOpacity(0.2), width: 1), // Optional border
-            ),
-            child: Icon(icon, color: color, size: 30),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          label,
-          style: theme.textTheme.labelMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: theme.colorScheme.onSurface,
-            letterSpacing: 0.3,
-          ),
-        ),
-      ],
     );
   }
 
@@ -338,7 +318,7 @@ class _ExpensesViewState extends State<ExpensesView> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  DateFormat('MMMM yyyy').format(selectedMonth),
+                  DateFormat('MMMM yyyy and more').format(selectedMonth),
                   style: theme.textTheme.titleMedium?.copyWith(
                     color: theme.colorScheme.onSurface,
                     fontWeight: FontWeight.w700,
@@ -352,7 +332,6 @@ class _ExpensesViewState extends State<ExpensesView> {
                 ),
               ],
             ),
-            // const Text('Tap to change', style: TextStyle(color: Colors.grey, fontSize: 10)),
           ],
         ),
       ),
@@ -361,15 +340,26 @@ class _ExpensesViewState extends State<ExpensesView> {
 
   List<Expense> _getFilteredExpenses(ExpenseProvider provider) {
     final expenses = provider.expensesForSelectedMonth;
-    if (!_isSearching || _searchQuery.isEmpty) return expenses;
-    final query = _searchQuery.toLowerCase();
-    return expenses
-        .where(
-          (e) =>
-              e.merchant.toLowerCase().contains(query) ||
-              e.category.toLowerCase().contains(query),
-        )
-        .toList();
+
+    // 1. Filter by Search
+    List<Expense> result = expenses;
+    if (_isSearching && _searchQuery.isNotEmpty) {
+      final query = _searchQuery.toLowerCase();
+      result = result
+          .where(
+            (e) =>
+                e.merchant.toLowerCase().contains(query) ||
+                e.category.toLowerCase().contains(query),
+          )
+          .toList();
+    }
+
+    // 2. Filter by Category Chip
+    if (_selectedCategory != 'All') {
+      result = result.where((e) => e.category == _selectedCategory).toList();
+    }
+
+    return result;
   }
 }
 

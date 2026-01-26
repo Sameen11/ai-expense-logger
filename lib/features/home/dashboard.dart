@@ -1,5 +1,5 @@
 import 'package:flutter/services.dart';
-// import 'package:ai_expense_logger/common/colors.dart';
+import 'package:ai_expense_logger/core/theme/app_colors.dart';
 import 'dart:ui'; // Required for ImageFilter
 import 'package:flutter/material.dart';
 import 'package:google_nav_bar/google_nav_bar.dart';
@@ -78,76 +78,85 @@ class DashboardScreenState extends State<DashboardScreen> {
         // backgroundColor handled by theme
         body: _screens[_selectedIndex],
         bottomNavigationBar: Container(
-          margin: const EdgeInsets.fromLTRB(20, 0, 20, 20), // Floating margins
+          margin: const EdgeInsets.fromLTRB(
+            16,
+            0,
+            16,
+            24,
+          ), // Increased bottom margin
           decoration: BoxDecoration(
-            color: theme.brightness == Brightness.dark
-                ? Colors.black.withOpacity(0.6)
-                : Colors.white.withOpacity(0.8), // Glass opacity
-            borderRadius: BorderRadius.circular(30), // Pill shape
+            color: theme.cardColor.withOpacity(0.8), // Responsive glass effect
+            borderRadius: BorderRadius.circular(30),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.1),
+                color: Colors.black.withOpacity(0.1), // Softer shadow
                 blurRadius: 20,
                 offset: const Offset(0, 10),
               ),
             ],
             border: Border.all(
-              color: isDark
-                  ? Colors.white.withOpacity(0.1)
-                  : Colors.white.withOpacity(0.5),
-              width: 1.5,
+              color: theme.dividerColor.withOpacity(0.1),
+              width: 1,
             ),
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(30),
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10), // Blur effect
+              filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 10,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                 child: GNav(
                   gap: 8,
-                  activeColor: theme.colorScheme.onPrimary,
-                  color: theme.colorScheme.onSurfaceVariant.withOpacity(
-                    0.6,
-                  ), // Dimmer inactive icons
+                  activeColor: AppColors.white,
+                  color: AppColors.darkTextSecondary, // Inactive color
                   iconSize: 24,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
-                    vertical: 14,
+                    vertical: 12,
                   ),
-                  duration: const Duration(milliseconds: 400),
-                  tabBackgroundColor: theme.colorScheme.primary,
-                  backgroundColor: Colors.transparent, // Important for glass
+                  duration: const Duration(milliseconds: 300),
+                  tabBackgroundColor:
+                      AppColors.primaryBrand, // Brand color selection
+                  backgroundColor: Colors.transparent,
                   selectedIndex: _selectedIndex,
                   onTabChange: _onTabChange,
                   tabs: List.generate(_iconList.length, (index) {
                     final isAddButton = index == 2;
                     return GButton(
                       icon: _iconList[index],
-                      text: isAddButton
-                          ? ''
-                          : _labelList[index], // Hide text for add button
+                      text: isAddButton ? '' : _labelList[index],
+                      textStyle: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.white,
+                        fontSize: 14,
+                      ),
                       leading: isAddButton
                           ? Container(
-                              padding: const EdgeInsets.all(8),
+                              padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: theme.colorScheme.primary,
+                                gradient: LinearGradient(
+                                  colors: [
+                                    AppColors.primaryBrand,
+                                    AppColors.secondaryBrand,
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
                                 shape: BoxShape.circle,
                                 boxShadow: [
                                   BoxShadow(
-                                    color: theme.colorScheme.primary
-                                        .withOpacity(0.4),
+                                    color: AppColors.primaryBrand.withOpacity(
+                                      0.5,
+                                    ),
                                     blurRadius: 12,
+                                    offset: const Offset(0, 4),
                                   ),
                                 ],
                               ),
-                              child: Icon(
+                              child: const Icon(
                                 Icons.add,
-                                color: theme.colorScheme.onPrimary,
-                                size: 20,
+                                color: AppColors.white,
+                                size: 22,
                               ),
                             )
                           : null,

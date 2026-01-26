@@ -21,10 +21,41 @@ class AppTheme {
         onBackground: AppColors.lightTextPrimary,
         onError: Colors.white,
       ),
-      textTheme: GoogleFonts.poppinsTextTheme(ThemeData.light().textTheme)
+      // Use Lexend as dynamic base, but we will override headings with Syne manually in widgets or here if possible
+      textTheme: GoogleFonts.lexendTextTheme(ThemeData.light().textTheme)
           .apply(
             bodyColor: AppColors.lightTextPrimary,
             displayColor: AppColors.lightTextPrimary,
+          )
+          .copyWith(
+            displayLarge: GoogleFonts.syne(
+              color: AppColors.lightTextPrimary,
+              fontWeight: FontWeight.bold,
+            ),
+            displayMedium: GoogleFonts.syne(
+              color: AppColors.lightTextPrimary,
+              fontWeight: FontWeight.bold,
+            ),
+            displaySmall: GoogleFonts.syne(
+              color: AppColors.lightTextPrimary,
+              fontWeight: FontWeight.bold,
+            ),
+            headlineLarge: GoogleFonts.syne(
+              color: AppColors.lightTextPrimary,
+              fontWeight: FontWeight.bold,
+            ),
+            headlineMedium: GoogleFonts.syne(
+              color: AppColors.lightTextPrimary,
+              fontWeight: FontWeight.bold,
+            ),
+            headlineSmall: GoogleFonts.syne(
+              color: AppColors.lightTextPrimary,
+              fontWeight: FontWeight.bold,
+            ),
+            titleLarge: GoogleFonts.syne(
+              color: AppColors.lightTextPrimary,
+              fontWeight: FontWeight.bold,
+            ),
           ),
       appBarTheme: const AppBarTheme(
         backgroundColor: AppColors.lightBackground,
@@ -83,11 +114,43 @@ class AppTheme {
         onSurface: AppColors.darkTextPrimary,
         onBackground: AppColors.darkTextPrimary,
         onError: Colors.white,
+        surfaceContainerHighest: AppColors.darkSurface, // For some widgets
       ),
-      textTheme: GoogleFonts.poppinsTextTheme(ThemeData.dark().textTheme).apply(
-        bodyColor: AppColors.darkTextPrimary,
-        displayColor: AppColors.darkTextPrimary,
-      ),
+      textTheme: GoogleFonts.lexendTextTheme(ThemeData.dark().textTheme)
+          .apply(
+            bodyColor: AppColors.darkTextPrimary,
+            displayColor: AppColors.darkTextPrimary,
+          )
+          .copyWith(
+            displayLarge: GoogleFonts.syne(
+              color: AppColors.darkTextPrimary,
+              fontWeight: FontWeight.bold,
+            ),
+            displayMedium: GoogleFonts.syne(
+              color: AppColors.darkTextPrimary,
+              fontWeight: FontWeight.bold,
+            ),
+            displaySmall: GoogleFonts.syne(
+              color: AppColors.darkTextPrimary,
+              fontWeight: FontWeight.bold,
+            ),
+            headlineLarge: GoogleFonts.syne(
+              color: AppColors.darkTextPrimary,
+              fontWeight: FontWeight.bold,
+            ),
+            headlineMedium: GoogleFonts.syne(
+              color: AppColors.darkTextPrimary,
+              fontWeight: FontWeight.bold,
+            ),
+            headlineSmall: GoogleFonts.syne(
+              color: AppColors.darkTextPrimary,
+              fontWeight: FontWeight.bold,
+            ),
+            titleLarge: GoogleFonts.syne(
+              color: AppColors.darkTextPrimary,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
       appBarTheme: const AppBarTheme(
         backgroundColor: AppColors.darkBackground,
         elevation: 0,

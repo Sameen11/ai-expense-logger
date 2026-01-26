@@ -146,11 +146,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   Future<void> _submit() async {
     // --- Check for terms and conditions first ---
-    // if (!_termsAccepted) {
-    //   SnackBarUtils.showError(
-    //       context, 'Please accept the terms and conditions to sign up.');
-    //   return;
-    // }
+    if (!_termsAccepted) {
+      SnackBarUtils.showError(
+        context,
+        'Please accept the terms and conditions to sign up.',
+      );
+      return;
+    }
 
     if (_formKey.currentState!.validate()) {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
@@ -306,6 +308,42 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       },
                     ),
                   ),
+                  const SizedBox(height: 20),
+
+                  // --- Terms & Conditions Checkbox ---
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: _termsAccepted,
+                        onChanged: (value) {
+                          setState(() {
+                            _termsAccepted = value ?? false;
+                          });
+                        },
+                        activeColor: theme.colorScheme.primary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _termsAccepted = !_termsAccepted;
+                            });
+                          },
+                          child: Text(
+                            "I agree to the Terms of Service and Privacy Policy",
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontSize: 13,
+                              color: theme.colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+
                   const SizedBox(height: 20),
                   authProvider.isLoading
                       ? Center(

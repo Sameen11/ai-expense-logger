@@ -38,17 +38,19 @@ class CategoryProgressItem extends StatelessWidget {
                   child: CircularProgressIndicator(
                     value: percentage,
                     strokeWidth: 4,
-                    backgroundColor: Colors.grey[200],
+                    backgroundColor: Theme.of(
+                      context,
+                    ).dividerColor.withOpacity(0.1),
                     valueColor: AlwaysStoppedAnimation<Color>(color),
                     strokeCap: StrokeCap.round, // Modern rounded tips
                   ),
                 ),
                 Text(
                   '${(percentage * 100).toStringAsFixed(0)}%',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
-                    color: Colors.black87,
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
               ],
@@ -60,8 +62,8 @@ class CategoryProgressItem extends StatelessWidget {
           Expanded(
             child: Text(
               title,
-              style: const TextStyle(
-                color: Colors.black87,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface,
                 fontWeight: FontWeight.w600,
                 fontSize: 16,
               ),
@@ -71,7 +73,7 @@ class CategoryProgressItem extends StatelessWidget {
           // 3. Amount
           Text(
             CurrencyUtils.formatAmount(amount, currency),
-            style: const TextStyle(
+            style: TextStyle(
               color: Colors.black87,
               fontWeight: FontWeight.bold,
               fontSize: 16,

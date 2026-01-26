@@ -4,6 +4,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../models/expense.dart';
+import '../models/category_stats.dart';
 import '../services/expense_service.dart';
 
 class ExpenseProvider with ChangeNotifier {
@@ -109,6 +110,7 @@ class ExpenseProvider with ChangeNotifier {
     double? tip,
     double? discount,
     String? invoiceNumber,
+    String? receiptPath,
   }) async {
     if (_currentUid == null) {
       _setError("User not logged in");
@@ -132,6 +134,7 @@ class ExpenseProvider with ChangeNotifier {
         tip: tip,
         discount: discount,
         invoiceNumber: invoiceNumber,
+        receiptPath: receiptPath,
       );
       await _expenseService.addExpense(_currentUid!, newExpense);
 
@@ -199,6 +202,29 @@ class ExpenseProvider with ChangeNotifier {
       await _expenseService.deleteExpense(_currentUid!, expenseId);
     } catch (e) {
       _setError(e.toString());
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<void> updateCategoryForExpenses(
+    String oldCategory,
+    String newCategory,
+  ) async {
+    if (_currentUid == null) {
+      _setError("User not logged in");
+      return;
+    }
+    _setLoading(true);
+    try {
+      await _expenseService.updateCategoryForExpenses(
+        _currentUid!,
+        oldCategory,
+        newCategory,
+      );
+    } catch (e) {
+      _setError(e.toString());
+      rethrow;
     } finally {
       _setLoading(false);
     }
@@ -360,44 +386,16 @@ class ExpenseProvider with ChangeNotifier {
   ];
 
   /// Prepares data for the pie chart, including percentages and colors for a specific currency
-  List<PieChartSectionData> getPieChartData(String currency) {
-    final categorySpending = getCategorySpending(currency);
-    final total = categorySpending.values.fold(0.0, (sum, val) => sum + val);
 
-    if (total == 0) return [];
-
-    final sortedCategories = categorySpending.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value)); // Sort by amount descending
-
-    List<PieChartSectionData> sections = [];
-
-    for (int i = 0; i < sortedCategories.length; i++) {
-      final entry = sortedCategories[i];
-      final amount = entry.value;
-      final percentage = (amount / total) * 100;
-
-      sections.add(
-        PieChartSectionData(
-          color: _pieChartColors[i % _pieChartColors.length],
-          value: amount,
-          title: '${percentage.toStringAsFixed(0)}%',
-          radius: 50,
-          titleStyle: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-            shadows: [Shadow(color: Colors.black, blurRadius: 2)],
-          ),
-          showTitle: percentage > 8,
-        ),
-      );
-    }
-    return sections;
-  }
+  // --- TREDS: Daily & Cumulative ---
 
   /// Returns data for the LineChart (Daily Trend) for a specific currency
+  /// Fills in 0.0 for days with no expenses to ensure the chart is continuous
   List<FlSpot> getDailyTrendPoints(String currency) {
-    if (expensesForSelectedMonth.isEmpty) return [];
+    if (expensesForSelectedMonth.isEmpty) {
+      // Return empty list so UI can show "No Data"
+      return [];
+    }
 
     final daysInMonth = DateUtils.getDaysInMonth(
       _selectedMonth.year,
@@ -418,14 +416,224 @@ class ExpenseProvider with ChangeNotifier {
     }
 
     // 2. Convert to FlSpot list
-    // We can just return spots for all days 1..daysInMonth
-    // Or just up to today if it's the current month?
-    // Showing the whole month (drop to 0) is standard for "monthly view".
+    return dailyTotals.entries
+        .map((e) => FlSpot(e.key.toDouble(), e.value))
+        .toList()
+      ..sort((a, b) => a.x.compareTo(b.x));
+  }
+
+  /// Returns cumulative spending points for the selected month
+  List<FlSpot> getCumulativeTrendPoints(String currency) {
+    if (expensesForSelectedMonth.isEmpty) return [];
+
+    final dailySpots = getDailyTrendPoints(currency);
+    List<FlSpot> cumulativeSpots = [];
+    double runningTotal = 0.0;
+
+    for (var spot in dailySpots) {
+      runningTotal += spot.y;
+      cumulativeSpots.add(FlSpot(spot.x, runningTotal));
+    }
+
+    return cumulativeSpots;
+  }
+
+  /// Returns daily trend points for the PREVIOUS month (for comparison)
+  /// X-axis matches current month days (1-31)
+  List<FlSpot> getLastMonthTrendPoints(String currency) {
+    final prevMonthDate = DateTime(
+      _selectedMonth.year,
+      _selectedMonth.month - 1,
+    );
+
+    // Filter expenses for previous month
+    final prevMonthExpenses = _expenses.where((e) {
+      final addedDate = e.createdAt.toDate();
+      return addedDate.year == prevMonthDate.year &&
+          addedDate.month == prevMonthDate.month &&
+          e.currency == currency;
+    }).toList();
+
+    if (prevMonthExpenses.isEmpty) return [];
+
+    final daysInPrevMonth = DateUtils.getDaysInMonth(
+      prevMonthDate.year,
+      prevMonthDate.month,
+    );
+
+    final Map<int, double> dailyTotals = {};
+    // Initialize all days to 0
+    final maxDays = DateUtils.getDaysInMonth(
+      _selectedMonth.year,
+      _selectedMonth.month,
+    );
+
+    for (int i = 1; i <= maxDays; i++) {
+      // If prev month had fewer days (e.g. Feb vs Mar), just skip or flatline?
+      // We'll just map 1:1 up to what's possible
+      if (i <= daysInPrevMonth) {
+        dailyTotals[i] = 0.0;
+      }
+    }
+
+    for (var expense in prevMonthExpenses) {
+      final day = expense.createdAt.toDate().day;
+      dailyTotals[day] = (dailyTotals[day] ?? 0.0) + expense.amount;
+    }
 
     return dailyTotals.entries
         .map((e) => FlSpot(e.key.toDouble(), e.value))
         .toList()
       ..sort((a, b) => a.x.compareTo(b.x));
+  }
+
+  // --- MONTHLY BAR CHART DATA ---
+
+  /// Returns total spending for the last 6 months (including current)
+  /// Map key is "MMM" (e.g., "Jan", "Feb") or DateTime
+  Map<DateTime, double> getSixMonthTrend(String currency) {
+    // Start from 5 months ago
+    final Map<DateTime, double> monthlyData = {};
+    final now =
+        _selectedMonth; // Use selected month as anchor? Or Today? usually Today is better for "History"
+
+    // Let's anchor on "Today" so it shows valid history regardless of selected month
+    final anchor = DateTime.now();
+
+    for (int i = 5; i >= 0; i--) {
+      final month = DateTime(anchor.year, anchor.month - i);
+      // Filter expenses for this month
+      final monthExpenses = _expenses.where((e) {
+        final d = e.createdAt.toDate();
+        return d.year == month.year &&
+            d.month == month.month &&
+            e.currency == currency;
+      });
+
+      final total = monthExpenses.fold(0.0, (sum, e) => sum + e.amount);
+      monthlyData[month] = total;
+    }
+    return monthlyData;
+  }
+
+  // --- PIE CHART & CATEGORY DETAILS ---
+
+  /// Returns detailed stats for each category
+  List<CategoryStats> getCategoryDetails(String currency) {
+    final expenses = expensesForSelectedMonth
+        .where((e) => e.currency == currency)
+        .toList();
+    if (expenses.isEmpty) return [];
+
+    final totalSpent = expenses.fold(0.0, (sum, e) => sum + e.amount);
+
+    // Group by category
+    final Map<String, List<Expense>> grouped = {};
+    for (var e in expenses) {
+      if (!grouped.containsKey(e.category)) grouped[e.category] = [];
+      grouped[e.category]!.add(e);
+    }
+
+    List<CategoryStats> stats = [];
+    grouped.forEach((category, list) {
+      final catTotal = list.fold(0.0, (sum, e) => sum + e.amount);
+      final avg = catTotal / list.length;
+
+      // Find top merchant
+      final Map<String, double> merchantSpend = {};
+      for (var e in list) {
+        merchantSpend.update(
+          e.merchant,
+          (val) => val + e.amount,
+          ifAbsent: () => e.amount,
+        );
+      }
+      // Sort to find max
+      var topMerchant = "N/A";
+      if (merchantSpend.isNotEmpty) {
+        final topEntry = merchantSpend.entries.reduce(
+          (a, b) => a.value > b.value ? a : b,
+        );
+        topMerchant = topEntry.key;
+      }
+      // Get emoji from first expense
+      final emoji = list.first.emoji ?? "🏷️";
+
+      stats.add(
+        CategoryStats(
+          categoryName: category,
+          emoji: emoji,
+          totalAmount: catTotal,
+          percentage: totalSpent > 0 ? (catTotal / totalSpent) : 0,
+          transactionCount: list.length,
+          averageSpend: avg,
+          topMerchant: topMerchant,
+        ),
+      );
+    });
+
+    // Sort by Total Amount Descending
+    stats.sort((a, b) => b.totalAmount.compareTo(a.totalAmount));
+    return stats;
+  }
+
+  /// Prepares data for the pie chart, grouping small % into "Other"
+  List<PieChartSectionData> getPieChartData(String currency) {
+    final stats = getCategoryDetails(currency);
+    if (stats.isEmpty) return [];
+
+    final total = stats.fold(0.0, (sum, s) => sum + s.totalAmount);
+    if (total == 0) return [];
+
+    List<PieChartSectionData> sections = [];
+    double otherTotal = 0;
+    final double threshold = 0.05; // 5%
+
+    int colorIndex = 0;
+
+    for (var stat in stats) {
+      if (stat.percentage < threshold && stats.length > 5) {
+        // Add to Other
+        otherTotal += stat.totalAmount;
+      } else {
+        sections.add(
+          PieChartSectionData(
+            color: _pieChartColors[colorIndex % _pieChartColors.length],
+            value: stat.totalAmount,
+            title: '${(stat.percentage * 100).toStringAsFixed(0)}%',
+            radius: 50,
+            titleStyle: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+              shadows: [Shadow(color: Colors.black, blurRadius: 2)],
+            ),
+            showTitle: true,
+          ),
+        );
+        colorIndex++;
+      }
+    }
+
+    if (otherTotal > 0) {
+      sections.add(
+        PieChartSectionData(
+          color: Colors.grey,
+          value: otherTotal,
+          title: '${((otherTotal / total) * 100).toStringAsFixed(0)}%',
+          radius: 50,
+          titleStyle: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            shadows: [Shadow(color: Colors.black, blurRadius: 2)],
+          ),
+          showTitle: true,
+        ),
+      );
+    }
+
+    return sections;
   }
 
   // Legacy getter

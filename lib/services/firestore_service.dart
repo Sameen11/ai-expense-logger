@@ -10,10 +10,12 @@ class FirestoreService {
   late final CollectionReference _usersCollection;
 
   FirestoreService() {
-    _usersCollection = _db.collection('users').withConverter<Map<String, dynamic>>(
-      fromFirestore: (snapshot, _) => snapshot.data()!,
-      toFirestore: (map, _) => map,
-    );
+    _usersCollection = _db
+        .collection('users')
+        .withConverter<Map<String, dynamic>>(
+          fromFirestore: (snapshot, _) => snapshot.data()!,
+          toFirestore: (map, _) => map,
+        );
   }
 
   /// Creates a new user document in Firestore upon sign-up.
@@ -55,5 +57,11 @@ class FirestoreService {
       return docSnap.data() as Map<String, dynamic>;
     }
     return null;
+  }
+
+  /// Deletes the user's document from Firestore.
+  /// This should be called when deleting an account.
+  Future<void> deleteUserData(String uid) async {
+    await _usersCollection.doc(uid).delete();
   }
 }

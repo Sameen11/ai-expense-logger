@@ -6,157 +6,160 @@ import 'package:http/http.dart' as http;
 import '../common/remote_values.dart';
 
 class GeminiService {
-  static  final String _apiKey = RemoteConfig.apiKey;
-  static const String _baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models';
-  
+  static final String _apiKey = RemoteConfig.apiKey;
+  static const String _baseUrl =
+      'https://generativelanguage.googleapis.com/v1beta/models';
+
   // Comprehensive receipt data model with all possible fields
-  static const Map<String, dynamic> _receiptSchema = {
-    "type": "object",
-    "properties": {
-      "merchant_name": {
-        "type": "string",
-        "description": "Full name of the store/restaurant/merchant"
-      },
-      "title": {
-        "type": "string",
-        "description": "Receipt title or heading if present"
-      },
-      "date": {
-        "type": "string",
-        "description": "Date of purchase in YYYY-MM-DD format"
-      },
-      "time": {
-        "type": "string",
-        "description": "Time of purchase in HH:MM format if visible"
-      },
-      "items": {
-        "type": "array",
+  // Dynamic schema generator
+  static Map<String, dynamic> _getReceiptSchema(List<String> categories) {
+    return {
+      "type": "object",
+      "properties": {
+        "merchant_name": {
+          "type": "string",
+          "description": "Full name of the store/restaurant/merchant",
+        },
+        "title": {
+          "type": "string",
+          "description": "Receipt title or heading if present",
+        },
+        "date": {
+          "type": "string",
+          "description": "Date of purchase in YYYY-MM-DD format",
+        },
+        "time": {
+          "type": "string",
+          "description": "Time of purchase in HH:MM format if visible",
+        },
         "items": {
-          "type": "object",
-          "properties": {
-            "name": {
-              "type": "string",
-              "description": "Item name/description"
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Item name/description",
+              },
+              "quantity": {
+                "type": "number",
+                "description": "Quantity of item (default 1 if not visible)",
+              },
+              "unit_price": {
+                "type": "number",
+                "description": "Price per unit/item",
+              },
+              "total_price": {
+                "type": "number",
+                "description":
+                    "Total price for this item (quantity × unit_price)",
+              },
             },
-            "quantity": {
-              "type": "number",
-              "description": "Quantity of item (default 1 if not visible)"
-            },
-            "unit_price": {
-              "type": "number",
-              "description": "Price per unit/item"
-            },
-            "total_price": {
-              "type": "number",
-              "description": "Total price for this item (quantity × unit_price)"
-            }
+            "required": ["name", "total_price"],
           },
-          "required": ["name", "total_price"]
+          "description": "Complete list of all items with individual prices",
         },
-        "description": "Complete list of all items with individual prices"
-      },
-      "subtotal": {
-        "type": "number",
-        "description": "Subtotal amount before tax/discount"
-      },
-      "discount": {
-        "type": "number",
-        "description": "Discount amount if any (0 if no discount)"
-      },
-      "discount_percentage": {
-        "type": "number",
-        "description": "Discount percentage if mentioned"
-      },
-      "tax_amount": {
-        "type": "number",
-        "description": "Tax amount (0 if not visible)"
-      },
-      "tax_rate": {
-        "type": "number",
-        "description": "Tax rate percentage if visible"
-      },
-      "service_charge": {
-        "type": "number",
-        "description": "Service charge if any"
-      },
-      "tip": {
-        "type": "number",
-        "description": "Tip amount if mentioned"
-      },
-      "total_amount": {
-        "type": "number",
-        "description": "Final total amount paid (numeric value only)"
-      },
-      "payment_method": {
-        "type": "string",
-        "enum": ["Cash", "Credit Card", "Debit Card", "Digital Payment", "UPI", "Other"],
-        "description": "Payment method used"
-      },
-      "category": {
-        "type": "string",
-        "enum": [
-          "Food & Drinks",
-          "Groceries",
-          "Transport",
-          "Shopping",
-          "Subscriptions",
-          "Bills & Utilities",
-          "Salary",
-          "Business",
-          "Investments",
-          "Health",
-          "Entertainment",
-          "Travel",
-          "Other"
-        ],
-        "description": "Category that best matches this expense. IMPORTANT: Use specific categories - Food & Drinks for restaurants/cafes, Transport for petrol/gas stations, Bills & Utilities for bank/utility payments, Health for medical/pharmacy. Only use 'Other' if truly unclear."
-      },
-      "currency": {
-        "type": "string",
-        "description": "Currency code detected from receipt (USD, PKR, EUR, GBP, INR, CNY, JPY, etc.). Default to USD if not visible."
-      },
-      "invoice_number": {
-        "type": "string",
-        "description": "Invoice/Receipt number if visible"
-      },
-      "split_receipts": {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "properties": {
-            "merchant_name": {"type": "string"},
-            "category": {"type": "string"},
-            "items": {
-              "type": "array",
+        "subtotal": {
+          "type": "number",
+          "description": "Subtotal amount before tax/discount",
+        },
+        "discount": {
+          "type": "number",
+          "description": "Discount amount if any (0 if no discount)",
+        },
+        "discount_percentage": {
+          "type": "number",
+          "description": "Discount percentage if mentioned",
+        },
+        "tax_amount": {
+          "type": "number",
+          "description": "Tax amount (0 if not visible)",
+        },
+        "tax_rate": {
+          "type": "number",
+          "description": "Tax rate percentage if visible",
+        },
+        "service_charge": {
+          "type": "number",
+          "description": "Service charge if any",
+        },
+        "tip": {"type": "number", "description": "Tip amount if mentioned"},
+        "total_amount": {
+          "type": "number",
+          "description": "Final total amount paid (numeric value only)",
+        },
+        "payment_method": {
+          "type": "string",
+          "enum": [
+            "Cash",
+            "Credit Card",
+            "Debit Card",
+            "Digital Payment",
+            "UPI",
+            "Other",
+          ],
+          "description": "Payment method used",
+        },
+        "category": {
+          "type": "string",
+          "enum": categories,
+          "description":
+              "Category that best matches this expense. Choose strictly from the provided list.",
+        },
+        "currency": {
+          "type": "string",
+          "description":
+              "Currency code detected from receipt (USD, PKR, EUR, GBP, INR, CNY, JPY, etc.). Default to USD if not visible.",
+        },
+        "invoice_number": {
+          "type": "string",
+          "description": "Invoice/Receipt number if visible",
+        },
+        "split_receipts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "merchant_name": {"type": "string"},
+              // We also restrict split category to the same enum
+              "category": {"type": "string", "enum": categories},
               "items": {
-                "type": "object",
-                "properties": {
-                  "name": {"type": "string"},
-                  "total_price": {"type": "number"}
-                }
-              }
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {"type": "string"},
+                    "total_price": {"type": "number"},
+                  },
+                },
+              },
+              "subtotal": {"type": "number"},
+              "total_amount": {
+                "type": "number",
+                "description":
+                    "Final total for this split INCLUDING its share of tax, tip, and fees",
+              },
             },
-            "subtotal": {"type": "number"},
-            "total_amount": {
-              "type": "number",
-              "description": "Final total for this split INCLUDING its share of tax, tip, and fees"
-            }
-          }
+          },
+          "description":
+              "Array of separate receipts if multiple merchants/categories found in one image",
         },
-        "description": "Array of separate receipts if multiple merchants/categories found in one image"
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Confidence level of the extraction (0.0 to 1.0)",
+        },
       },
-      "confidence": {
-        "type": "number",
-        "minimum": 0,
-        "maximum": 1,
-        "description": "Confidence level of the extraction (0.0 to 1.0)"
-      }
-    },
-    "required": ["merchant_name", "total_amount", "items", "confidence"]
-  };
+      "required": ["merchant_name", "total_amount", "items", "confidence"],
+    };
+  }
 
   /// Process receipt image and extract comprehensive structured data
-  static Future<ReceiptData?> processReceiptImage(String imagePath) async {
+  static Future<ReceiptData?> processReceiptImage(
+    String imagePath, {
+    List<String>? validCategories,
+  }) async {
     try {
       final File imageFile = File(imagePath);
       if (!await imageFile.exists()) {
@@ -166,14 +169,37 @@ class GeminiService {
       final Uint8List imageBytes = await imageFile.readAsBytes();
       final String base64Image = base64Encode(imageBytes);
 
-      final String url = '$_baseUrl/gemini-2.5-flash:generateContent?key=$_apiKey';
-      
+      final String url =
+          '$_baseUrl/gemini-2.5-flash:generateContent?key=$_apiKey';
+
+      // Default categories if none provided
+      final categories =
+          validCategories ??
+          [
+            "Food & Drinks",
+            "Groceries",
+            "Transport",
+            "Shopping",
+            "Subscriptions",
+            "Bills & Utilities",
+            "Salary",
+            "Business",
+            "Investments",
+            "Health",
+            "Entertainment",
+            "Travel",
+            "Other",
+          ];
+
+      final categoryListString = categories.map((c) => '- "$c"').join('\n');
+
       final Map<String, dynamic> requestBody = {
         "contents": [
           {
             "parts": [
               {
-                "text": """
+                "text":
+                    """
 Analyze this receipt/image thoroughly and extract EVERY SINGLE DETAIL visible:
 
 CRITICAL REQUIREMENTS:
@@ -192,163 +218,65 @@ CURRENCY DETECTION:
 - If you see "Rs" or "PKR" → currency: "PKR"
 - If you see "\$" → currency: "USD"
 - If you see "€" → currency: "EUR"
-- If you see "£" → currency: "GBP"
-- If you see "₹" or "INR" → currency: "INR"
 - If unclear, default to "USD"
 
-CATEGORY SELECTION (VERY IMPORTANT - BE SPECIFIC):
-- Restaurants, cafes, food delivery → "Food & Drinks"
-- Supermarkets, grocery stores → "Groceries"
-- Petrol pumps, gas stations, fuel → "Transport"
-- Uber, taxi, bus, train tickets → "Transport"
-- Clothing, electronics, general shopping → "Shopping"
-- Netflix, Spotify, software subscriptions → "Subscriptions"
-- Electricity, water, gas bills, bank charges → "Bills & Utilities"
-- Doctor, pharmacy, hospital → "Health"
-- Movies, games, events → "Entertainment"
-- Hotels, flights, vacation → "Travel"
-- Gym, office supplies → "Business"
-- Only use "Other" if truly unclear
+CATEGORY SELECTION (VERY IMPORTANT):
+Match the expense to one of the following valid categories:
+$categoryListString
+- Only use "Other" if truly unclear or no other category fits.
 
 DETAILED ITEMS EXTRACTION:
 - List EVERY item individually with its name
 - Extract individual price for EACH item
-- Include quantity if visible (default to 1)
 - Calculate total_price = quantity × unit_price
 
 SPLIT RECEIPT DETECTION:
 If you see multiple merchants (e.g., restaurant + petrol pump on same receipt):
 - Create separate entries in split_receipts array
-- Each split should have: merchant_name, category, items[], subtotal, and total_amount
-- Assign CORRECT category to each split (petrol → Transport, food → Food & Drinks, ATM → Bills & Utilities)
-- CRITICAL: Calculate "total_amount" for each split by adding its share of Tax/Tip/Service Charge.
-
-EXAMPLE for Restaurant:
-{
-  "merchant_name": "Pizza Hut",
-  "title": "Order Receipt",
-  "date": "2024-01-15",
-  "time": "18:30",
-  "currency": "USD",
-  "items": [
-    {"name": "Margherita Pizza", "quantity": 1, "unit_price": 499, "total_price": 499},
-    {"name": "Coca Cola", "quantity": 2, "unit_price": 60, "total_price": 120}
-  ],
-  "subtotal": 619,
-  "discount": 50,
-  "discount_percentage": 8.08,
-  "tax_amount": 111.42,
-  "tax_rate": 18,
-  "service_charge": 30,
-  "total_amount": 710.42,
-  "payment_method": "Credit Card",
-  "category": "Food & Drinks",
-  "invoice_number": "INV-12345"
-}
-
-EXAMPLE for Petrol Station:
-{
-  "merchant_name": "Shell Gas Station",
-  "date": "2024-01-15",
-  "currency": "USD",
-  "items": [
-    {"name": "Diesel", "quantity": 20, "unit_price": 1.50, "total_price": 30.00}
-  ],
-  "total_amount": 30.00,
-  "category": "Transport",
-  "invoice_number": "12345"
-}
-
-EXAMPLE for SPLIT RECEIPT (Petrol + ATM + Food on same image):
-{
-  "merchant_name": "Combined Receipt",
-  "date": "2024-01-15",
-  "currency": "USD",
-  "total_amount": 180.00,
-  "category": "Other",
-  "items": [],
-  "split_receipts": [
-    {
-      "merchant_name": "Shell Petrol Pump",
-      "category": "Transport",
-      "items": [
-        {"name": "Petrol", "total_price": 50.00}
-      ],
-      "subtotal": 50.00,
-      "total_amount": 55.00
-    },
-    {
-      "merchant_name": "ATM Withdrawal Fee",
-      "category": "Bills & Utilities",
-      "items": [
-        {"name": "ATM Fee", "total_price": 5.00}
-      ],
-      "subtotal": 5.00,
-      "total_amount": 5.00
-    },
-    {
-      "merchant_name": "McDonald's",
-      "category": "Food & Drinks",
-      "items": [
-        {"name": "Big Mac Meal", "total_price": 10.00},
-        {"name": "Fries", "total_price": 3.00}
-      ],
-      "subtotal": 13.00,
-      "total_amount": 15.00
-    }
-  ],
-  "confidence": 0.9
-}
-
-Be VERY careful with:
-1. Category selection - be specific, avoid "Other" unless truly unclear
-2. For split receipts - assign CORRECT category to EACH split (petrol=Transport, ATM=Bills & Utilities, food=Food & Drinks)
-3. Currency detection - look for symbols and codes
-4. Numbers - extract exactly as written on receipt
-If any field is not visible, set it to null or 0 as appropriate.
-"""
+- Assign CORRECT category to each split from the valid list above
+""",
               },
               {
-                "inline_data": {
-                  "mime_type": "image/jpeg",
-                  "data": base64Image
-                }
-              }
-            ]
-          }
+                "inline_data": {"mime_type": "image/jpeg", "data": base64Image},
+              },
+            ],
+          },
         ],
         "generationConfig": {
           "response_mime_type": "application/json",
-          "response_schema": _receiptSchema
-        }
+          "response_schema": _getReceiptSchema(categories),
+        },
       };
 
       final response = await http.post(
         Uri.parse(url),
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: {'Content-Type': 'application/json'},
         body: json.encode(requestBody),
       );
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = json.decode(response.body);
-        
-        if (responseData['candidates'] != null && 
+
+        if (responseData['candidates'] != null &&
             responseData['candidates'].isNotEmpty) {
-          
-          final String jsonText = responseData['candidates'][0]['content']['parts'][0]['text'];
+          final String jsonText =
+              responseData['candidates'][0]['content']['parts'][0]['text'];
           // Clean up JSON if wrapped in markdown
-          final String cleanedJson = jsonText.replaceAll('```json', '').replaceAll('```', '').trim();
+          final String cleanedJson = jsonText
+              .replaceAll('```json', '')
+              .replaceAll('```', '')
+              .trim();
           final Map<String, dynamic> extractedData = json.decode(cleanedJson);
-          
+
           return ReceiptData.fromJson(extractedData);
         } else {
           throw Exception('No candidates in API response');
         }
       } else {
         final errorData = json.decode(response.body);
-        throw Exception('API Error: ${response.statusCode} - ${errorData['error']?['message'] ?? 'Unknown error'}');
+        throw Exception(
+          'API Error: ${response.statusCode} - ${errorData['error']?['message'] ?? 'Unknown error'}',
+        );
       }
     } catch (e) {
       print('Error processing receipt: $e');
@@ -357,7 +285,10 @@ If any field is not visible, set it to null or 0 as appropriate.
   }
 
   /// Process PDF receipt
-  static Future<ReceiptData?> processReceiptPDF(String pdfPath) async {
+  static Future<ReceiptData?> processReceiptPDF(
+    String pdfPath, {
+    List<String>? validCategories,
+  }) async {
     try {
       final File pdfFile = File(pdfPath);
       if (!await pdfFile.exists()) {
@@ -367,14 +298,36 @@ If any field is not visible, set it to null or 0 as appropriate.
       final Uint8List pdfBytes = await pdfFile.readAsBytes();
       final String base64Pdf = base64Encode(pdfBytes);
 
-      final String url = '$_baseUrl/gemini-2.5-flash:generateContent?key=$_apiKey';
-      
+      final String url =
+          '$_baseUrl/gemini-2.5-flash:generateContent?key=$_apiKey';
+
+      // Default categories if none provided
+      final categories =
+          validCategories ??
+          [
+            "Food & Drinks",
+            "Groceries",
+            "Transport",
+            "Shopping",
+            "Subscriptions",
+            "Bills & Utilities",
+            "Salary",
+            "Business",
+            "Investments",
+            "Health",
+            "Entertainment",
+            "Travel",
+            "Other",
+          ];
+      final categoryListString = categories.map((c) => '- "$c"').join('\n');
+
       final Map<String, dynamic> requestBody = {
         "contents": [
           {
             "parts": [
               {
-                "text": """
+                "text":
+                    """
 Analyze this PDF receipt and extract ALL details:
 - Merchant name, title, date, time
 - EVERY item with individual prices
@@ -384,49 +337,146 @@ Analyze this PDF receipt and extract ALL details:
 - Invoice number if visible
 - Split receipts if multiple merchants present
 
+CATEGORY SELECTION:
+Match the expense to one of the following valid categories:
+$categoryListString
+
 Extract with maximum detail and accuracy.
-"""
+""",
               },
               {
                 "inline_data": {
                   "mime_type": "application/pdf",
-                  "data": base64Pdf
-                }
-              }
-            ]
-          }
+                  "data": base64Pdf,
+                },
+              },
+            ],
+          },
         ],
         "generationConfig": {
           "response_mime_type": "application/json",
-          "response_schema": _receiptSchema
-        }
+          "response_schema": _getReceiptSchema(categories),
+        },
       };
 
       final response = await http.post(
         Uri.parse(url),
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: {'Content-Type': 'application/json'},
         body: json.encode(requestBody),
       );
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = json.decode(response.body);
-        
-        if (responseData['candidates'] != null && 
+
+        if (responseData['candidates'] != null &&
             responseData['candidates'].isNotEmpty) {
-          
-          final String jsonText = responseData['candidates'][0]['content']['parts'][0]['text'];
-          final String cleanedJson = jsonText.replaceAll('```json', '').replaceAll('```', '').trim();
+          final String jsonText =
+              responseData['candidates'][0]['content']['parts'][0]['text'];
+          final String cleanedJson = jsonText
+              .replaceAll('```json', '')
+              .replaceAll('```', '')
+              .trim();
           final Map<String, dynamic> extractedData = json.decode(cleanedJson);
-          
+
           return ReceiptData.fromJson(extractedData);
         }
       }
-      
+
       throw Exception('Failed to process PDF: ${response.statusCode}');
     } catch (e) {
       print('Error processing PDF receipt: $e');
+      return null;
+    }
+  }
+
+  /// Generate spending insights and tips using Gemini
+  static Future<Map<String, dynamic>?> generateSpendingInsights(
+    List<dynamic> expenses,
+    double budget,
+    String currency,
+  ) async {
+    try {
+      // 1. Prepare data summary for the prompt
+      // We limit to top 20 expensive items to avoid token limits, or summarize by category
+      double totalSpent = 0;
+      final Map<String, double> categoryTotals = {};
+
+      for (var e in expenses) {
+        // Handle both Expense object and raw maps if needed, currently assuming Expense objects from provider
+        final amount = e.amount as double;
+        final category = e.category as String;
+
+        totalSpent += amount;
+        categoryTotals[category] = (categoryTotals[category] ?? 0) + amount;
+      }
+
+      final String currencySymbol = currency; // Simplified
+
+      final summaryBuffer = StringBuffer();
+      summaryBuffer.writeln("Total Spent: $totalSpent $currencySymbol");
+      summaryBuffer.writeln("Budget: $budget $currencySymbol");
+      summaryBuffer.writeln("Category Breakdown:");
+      categoryTotals.forEach((key, value) {
+        summaryBuffer.writeln("- $key: $value $currencySymbol");
+      });
+
+      // 2. Construct Prompt
+      final String prompt =
+          """
+You are a financial analyst. Analyze this monthly spending data:
+
+$summaryBuffer
+
+Provide a JSON response with the following 3 fields:
+1. "analysis": A 1-sentence specific insight about the spending trend or biggest expense category. Be friendly but direct.
+2. "tip": A 1-sentence actionable tip to save money based on these specific categories.
+3. "score": A score from 1-10 (integer) rating their financial health/budget adherence.
+
+Example JSON format:
+{
+  "analysis": "Your food spending is 40% of your total, which is high.",
+  "tip": "Try cooking at home more often to reduce food costs.",
+  "score": 6
+}
+""";
+
+      final String url =
+          '$_baseUrl/gemini-2.5-flash:generateContent?key=$_apiKey';
+
+      final Map<String, dynamic> requestBody = {
+        "contents": [
+          {
+            "parts": [
+              {"text": prompt},
+            ],
+          },
+        ],
+        "generationConfig": {"response_mime_type": "application/json"},
+      };
+
+      // 3. Call API
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(requestBody),
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> responseData = json.decode(response.body);
+        if (responseData['candidates'] != null &&
+            responseData['candidates'].isNotEmpty) {
+          final String jsonText =
+              responseData['candidates'][0]['content']['parts'][0]['text'];
+          final String cleanedJson = jsonText
+              .replaceAll('```json', '')
+              .replaceAll('```', '')
+              .trim();
+          return json.decode(cleanedJson);
+        }
+      }
+      return null;
+    } catch (e) {
+      print('Error generating insights: $e');
       return null;
     }
   }
@@ -482,8 +532,10 @@ class ReceiptData {
       title: json['title'],
       date: json['date'],
       time: json['time'],
-      items: json['items'] != null 
-          ? (json['items'] as List).map((item) => ReceiptItem.fromJson(item)).toList()
+      items: json['items'] != null
+          ? (json['items'] as List)
+                .map((item) => ReceiptItem.fromJson(item))
+                .toList()
           : [],
       subtotal: json['subtotal']?.toDouble(),
       discount: json['discount']?.toDouble() ?? 0.0,
@@ -498,7 +550,9 @@ class ReceiptData {
       invoiceNumber: json['invoice_number'],
       currency: json['currency'] ?? 'USD', // Default to USD if not detected
       splitReceipts: json['split_receipts'] != null
-          ? (json['split_receipts'] as List).map((sr) => SplitReceipt.fromJson(sr)).toList()
+          ? (json['split_receipts'] as List)
+                .map((sr) => SplitReceipt.fromJson(sr))
+                .toList()
           : null,
       confidence: (json['confidence'] ?? 0.0).toDouble(),
     );
@@ -528,7 +582,8 @@ class ReceiptData {
     };
   }
 
-  bool get hasSplitReceipts => splitReceipts != null && splitReceipts!.isNotEmpty;
+  bool get hasSplitReceipts =>
+      splitReceipts != null && splitReceipts!.isNotEmpty;
 }
 
 /// Enhanced receipt item with quantity and unit price
@@ -586,7 +641,9 @@ class SplitReceipt {
       merchantName: json['merchant_name'] ?? 'Unknown',
       category: json['category'] ?? 'Other',
       items: json['items'] != null
-          ? (json['items'] as List).map((item) => ReceiptItem.fromJson(item)).toList()
+          ? (json['items'] as List)
+                .map((item) => ReceiptItem.fromJson(item))
+                .toList()
           : [],
       subtotal: sub,
       totalAmount: (json['total_amount'] ?? sub).toDouble(),

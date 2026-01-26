@@ -54,10 +54,10 @@ class ExpenseListItem extends StatelessWidget {
                   // Merchant Name
                   Text(
                     expense.merchant,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w700,
                       fontSize: 15,
-                      color: AppColors.textPrimary,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -84,10 +84,10 @@ class ExpenseListItem extends StatelessWidget {
               children: [
                 Text(
                   '-${CurrencyUtils.formatAmount(expense.amount, expense.currency)}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 16,
-                    color: AppColors.textPrimary,
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -116,6 +116,8 @@ class ExpenseListItem extends StatelessWidget {
       ),
     );
 
+    final theme = Theme.of(context);
+
     if (!hasContainer) {
       return Material(color: Colors.transparent, child: content);
     }
@@ -123,14 +125,15 @@ class ExpenseListItem extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            offset: const Offset(0, 4),
-            blurRadius: 16,
-          ),
+          if (theme.brightness == Brightness.light)
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              offset: const Offset(0, 4),
+              blurRadius: 16,
+            ),
         ],
       ),
       child: Material(

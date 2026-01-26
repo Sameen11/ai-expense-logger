@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 
 // import '../../common/colors.dart';
 import '../../models/expense.dart';
+import '../../providers/category_provider.dart';
 import '../../providers/expense_provider.dart';
+import '../settings/category/add_category.dart';
 import '../../services/gemini_service.dart';
 import '../../widgets/notification_bar.dart';
 
@@ -141,26 +143,6 @@ class _AddExpenseManuallyScreenState extends State<AddExpenseManuallyScreen> {
     {"code": "DZD", "symbol": "د.ج", "name": "Algerian Dinar"},
   ];
 
-  // Category set B (Finance App Standard) with emoji icons
-  // Category set B (Finance App Standard) with emoji icons
-  final List<Map<String, String>> _categories = [
-    {"label": "Food & Drinks", "emoji": "🍜"}, // Ramen/Food
-    {"label": "Groceries", "emoji": "🥬"}, // Fresh Greens
-    {"label": "Transport", "emoji": "🚖"}, // Taxi/Car
-    {"label": "Shopping", "emoji": "🛍️"}, // Shopping Bags
-    {"label": "Subscriptions", "emoji": "💳"}, // Credit Card/Payment
-    {"label": "Bills & Utilities", "emoji": "⚡"}, // High Voltage
-    {"label": "Salary", "emoji": "💰"}, // Money Bag
-    {"label": "Business", "emoji": "🤝"}, // Handshake
-    {"label": "Investments", "emoji": "📈"}, // Chart Increasing
-    {"label": "Health", "emoji": "🩺"}, // Stethoscope
-    {"label": "Entertainment", "emoji": "🍿"}, // Popcorn
-    {"label": "Travel", "emoji": "🌏"}, // Globe Asia-Australia (looks global)
-    {"label": "Other", "emoji": "🧩"}, // Puzzle Piece
-    {"label": "Education", "emoji": "🎓"}, // Graduation Cap (Added common one)
-    {"label": "Gift", "emoji": "🎁"}, // Gift (Added common one)
-  ];
-
   // Store receipt items and split receipts
   List<ReceiptItem> _receiptItems = [];
   List<SplitReceipt>? _splitReceipts;
@@ -255,13 +237,6 @@ class _AddExpenseManuallyScreenState extends State<AddExpenseManuallyScreen> {
       // Auto-generate notes from receipt data (editable)
       _generateNotesFromReceipt(receiptData);
 
-      // Set category emoji
-      final match = _categories.firstWhere(
-        (c) => c["label"]!.toLowerCase() == receiptData.category.toLowerCase(),
-        orElse: () => {},
-      );
-      if (match.isNotEmpty) _selectedCategoryEmoji = match["emoji"];
-
       // Show confidence warning
       if (receiptData.confidence < 0.8) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -317,12 +292,6 @@ class _AddExpenseManuallyScreenState extends State<AddExpenseManuallyScreen> {
         } catch (e) {}
       }
 
-      final match = _categories.firstWhere(
-        (c) => c["label"]!.toLowerCase() == category.toLowerCase(),
-        orElse: () => {},
-      );
-      if (match.isNotEmpty) _selectedCategoryEmoji = match["emoji"];
-
       if (confidence != null && confidence < 0.8) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           SnackBarUtils.showWarning(
@@ -340,35 +309,7 @@ class _AddExpenseManuallyScreenState extends State<AddExpenseManuallyScreen> {
       _amountController.text = e.amount.toString(); // or toStringAsFixed(2)
       _dateController.text = DateFormat('MMM dd, yyyy').format(e.date);
       _categoryController.text = e.category;
-      _notesController.text = e.notes ?? '';
-      _selectedDate = e.date;
-      _selectedCurrency = e.currency;
-      _selectedCategoryEmoji = e.emoji;
 
-      // Optional: Load advanced fields if they exist
-      if (e.items != null) {
-        _receiptItems = e.items!
-            .map(
-              (item) => ReceiptItem(
-                name: item['name'] ?? 'Item',
-                quantity: (item['quantity'] as num).toDouble(),
-                totalPrice: (item['total_price'] as num).toDouble(),
-              ),
-            )
-            .toList();
-      }
-      _subtotal = e.subtotal;
-      _taxAmount = e.tax;
-      _tip = e.tip;
-      _discount = e.discount;
-      _invoiceNumber = e.invoiceNumber;
-    } // HANDLE EDIT MODE
-    if (widget.expenseToEdit != null) {
-      final e = widget.expenseToEdit!;
-      _merchantController.text = e.merchant;
-      _amountController.text = e.amount.toString(); // or toStringAsFixed(2)
-      _dateController.text = DateFormat('MMM dd, yyyy').format(e.date);
-      _categoryController.text = e.category;
       _notesController.text = e.notes ?? "";
       _selectedDate = e.date;
       _selectedCurrency = e.currency;
@@ -599,6 +540,9 @@ class _AddExpenseManuallyScreenState extends State<AddExpenseManuallyScreen> {
   // Open bottom sheet for category selection
   void _openCategorySheet() {
     final theme = Theme.of(context);
+
+    // We don't fetch here anymore, we use Consumer inside the sheet
+
     showModalBottomSheet(
       context: context,
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -633,58 +577,293 @@ class _AddExpenseManuallyScreenState extends State<AddExpenseManuallyScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
+
+                // Wrap in Consumer to be reactive to deletes/additions
                 Flexible(
-                  child: GridView.builder(
-                    shrinkWrap: true,
-                    itemCount: _categories.length,
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          childAspectRatio: 3 / 2,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                        ),
-                    itemBuilder: (context, index) {
-                      final cat = _categories[index];
-                      return InkWell(
-                        onTap: () {
-                          setState(() {
-                            _categoryController.text = cat["label"]!;
-                            _selectedCategoryEmoji = cat["emoji"];
-                          });
-                          Navigator.pop(context);
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: theme.cardColor,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: theme.dividerColor.withOpacity(0.1),
+                  child: Consumer<CategoryProvider>(
+                    builder: (context, catProvider, child) {
+                      final categories = catProvider.getAllCategories();
+
+                      return GridView.builder(
+                        shrinkWrap: true,
+                        // Add 1 for the "Add New" button
+                        itemCount: categories.length + 1,
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 3,
+                              childAspectRatio: 3 / 2,
+                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 12,
                             ),
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                cat["emoji"]!,
-                                style: const TextStyle(fontSize: 20),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                cat["label"]!,
-                                textAlign: TextAlign.center,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  // fontSize: 10,
-                                  fontWeight: FontWeight.w600,
-                                  color: theme.colorScheme.onSurface,
+                        itemBuilder: (context, index) {
+                          // Logic for "Add New Category" button (last item)
+                          if (index == categories.length) {
+                            return InkWell(
+                              onTap: () async {
+                                Navigator.pop(context); // Close sheet first
+
+                                // Navigate to Add Category Screen
+                                await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const AddCategoryScreen(),
+                                  ),
+                                );
+
+                                // Re-open sheet to show new category
+                                if (mounted) {
+                                  _openCategorySheet();
+                                }
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.primaryContainer
+                                      .withOpacity(0.3),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: theme.colorScheme.primary
+                                        .withOpacity(0.5),
+                                    style: BorderStyle.solid,
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.add_circle_outline_rounded,
+                                      size: 24,
+                                      color: theme.colorScheme.primary,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      "Add New",
+                                      textAlign: TextAlign.center,
+                                      style: theme.textTheme.labelSmall
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                            color: theme.colorScheme.primary,
+                                          ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ],
-                          ),
-                        ),
+                            );
+                          }
+
+                          // Logic for existing categories
+                          final cat = categories[index];
+                          return InkWell(
+                            onTap: () {
+                              setState(() {
+                                _categoryController.text = cat.name;
+                                _selectedCategoryEmoji = null;
+                              });
+                              Navigator.pop(context);
+                            },
+                            // Add Long Press to Manage (Edit/Delete)
+                            onLongPress: () {
+                              showModalBottomSheet(
+                                context: context,
+                                backgroundColor: theme.scaffoldBackgroundColor,
+                                shape: const RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.vertical(
+                                    top: Radius.circular(20),
+                                  ),
+                                ),
+                                builder: (ctx) {
+                                  return SafeArea(
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 16.0,
+                                          ),
+                                          child: Container(
+                                            height: 4,
+                                            width: 40,
+                                            decoration: BoxDecoration(
+                                              color: theme.dividerColor
+                                                  .withOpacity(0.4),
+                                              borderRadius:
+                                                  BorderRadius.circular(2),
+                                            ),
+                                          ),
+                                        ),
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 16.0,
+                                          ),
+                                          child: Text(
+                                            "Manage '${cat.name}'",
+                                            style: theme.textTheme.titleMedium
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                          ),
+                                        ),
+                                        ListTile(
+                                          leading: Icon(
+                                            Icons.edit_rounded,
+                                            color: theme.colorScheme.primary,
+                                          ),
+                                          title: const Text("Edit Category"),
+                                          onTap: () async {
+                                            Navigator.pop(
+                                              ctx,
+                                            ); // Close Manage sheet
+                                            Navigator.pop(
+                                              context,
+                                            ); // Close Category Picker
+
+                                            // Navigate to Edit
+                                            await Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) =>
+                                                    AddCategoryScreen(
+                                                      categoryToEdit: cat,
+                                                    ),
+                                              ),
+                                            );
+
+                                            // Re-open category sheet to show changes
+                                            if (mounted) _openCategorySheet();
+                                          },
+                                        ),
+                                        ListTile(
+                                          leading: const Icon(
+                                            Icons.delete_rounded,
+                                            color: Colors.red,
+                                          ),
+                                          title: const Text(
+                                            "Delete Category",
+                                            style: TextStyle(color: Colors.red),
+                                          ),
+                                          onTap: () {
+                                            Navigator.pop(
+                                              ctx,
+                                            ); // Close Manage sheet
+
+                                            // Show Delete Confirmation
+                                            showDialog(
+                                              context: context,
+                                              builder: (dialogCtx) => AlertDialog(
+                                                backgroundColor:
+                                                    theme.cardColor,
+                                                title: Text(
+                                                  "Delete '${cat.name}'?",
+                                                  style: theme
+                                                      .textTheme
+                                                      .titleMedium,
+                                                ),
+                                                content: Text(
+                                                  "You are about to delete this category. This cannot be undone.",
+                                                  style: theme
+                                                      .textTheme
+                                                      .bodyMedium,
+                                                ),
+                                                actions: [
+                                                  TextButton(
+                                                    onPressed: () =>
+                                                        Navigator.pop(
+                                                          dialogCtx,
+                                                        ),
+                                                    child: Text(
+                                                      "Cancel",
+                                                      style: TextStyle(
+                                                        color: theme
+                                                            .colorScheme
+                                                            .onSurfaceVariant,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  TextButton(
+                                                    onPressed: () async {
+                                                      Navigator.pop(
+                                                        dialogCtx,
+                                                      ); // Close dialog
+                                                      try {
+                                                        await catProvider
+                                                            .deleteCategory(
+                                                              cat.name,
+                                                            );
+                                                        if (mounted) {
+                                                          SnackBarUtils.showSuccess(
+                                                            context,
+                                                            "Category deleted",
+                                                          );
+                                                        }
+                                                      } catch (e) {
+                                                        if (mounted) {
+                                                          String errorMsg = e
+                                                              .toString()
+                                                              .replaceAll(
+                                                                "Exception: ",
+                                                                "",
+                                                              );
+                                                          SnackBarUtils.showError(
+                                                            context,
+                                                            errorMsg,
+                                                          );
+                                                        }
+                                                      }
+                                                    },
+                                                    child: const Text(
+                                                      "Delete",
+                                                      style: TextStyle(
+                                                        color: Colors.redAccent,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                        const SizedBox(height: 12),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: theme.cardColor,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: theme.dividerColor.withOpacity(0.1),
+                                ),
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    cat.iconData,
+                                    size: 24,
+                                    color: cat.colorValue,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    cat.name,
+                                    textAlign: TextAlign.center,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      color: theme.colorScheme.onSurface,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
                       );
                     },
                   ),
@@ -1180,11 +1359,7 @@ class _AddExpenseManuallyScreenState extends State<AddExpenseManuallyScreen> {
   }
 
   String _emojiForCategory(String category) {
-    final match = _categories.firstWhere(
-      (c) => c["label"]!.toLowerCase() == category.toLowerCase(),
-      orElse: () => {"emoji": "📦"},
-    );
-    return match["emoji"] ?? "📦";
+    return context.read<CategoryProvider>().getEmojiForCategory(category);
   }
 
   // Get currency symbol from currency code

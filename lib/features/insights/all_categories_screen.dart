@@ -1,57 +1,46 @@
-import 'package:ai_expense_logger/providers/category_provider.dart';
+import 'package:ai_expense_logger/providers/expense_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
-import '../../models/category.dart';
-import 'category_progress_item.dart';
+import 'category_detail_card.dart';
 
 class AllCategoriesScreen extends StatelessWidget {
-  final List<MapEntry<String, double>> sortedCategories;
-  final double totalSpent;
+  final String currency;
 
-  const AllCategoriesScreen({
-    super.key,
-    required this.sortedCategories,
-    required this.totalSpent,
-  });
+  const AllCategoriesScreen({super.key, required this.currency});
 
   @override
   Widget build(BuildContext context) {
-    // Expanded list of colors
-    final colors = [
-      Colors.blue[600]!,
-      Colors.green[600]!,
-      Colors.purple[600]!,
-      Colors.orange[600]!,
-      Colors.red[600]!,
-      Colors.teal[600]!,
-      Colors.pink[600]!,
-      Colors.indigo[600]!,
-    ];
-
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('All Categories'),
-        backgroundColor: Colors.grey[100],
+        backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
+        centerTitle: true,
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16.0),
-        itemCount: sortedCategories.length,
-        itemBuilder: (context, index) {
-          final entry = sortedCategories[index];
-          final categoryName = entry.key;
-          final amount = entry.value;
-          final percentage = (totalSpent > 0) ? amount / totalSpent : 0.0;
+      body: Consumer<ExpenseProvider>(
+        builder: (context, provider, child) {
+          final stats = provider.getCategoryDetails(currency);
 
-          return CategoryProgressItem(
-            icon: Icons.receipt_long,
-            title: categoryName,
-            amount: amount,
-            percentage: percentage,
-            color: colors[index % colors.length], // Cycle through all colors
+          if (stats.isEmpty) {
+            return Center(
+              child: Text(
+                'No categories found',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            );
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(16.0),
+            itemCount: stats.length,
+            itemBuilder: (context, index) {
+              final stat = stats[index];
+              return CategoryDetailCard(stat: stat, currency: currency);
+            },
           );
         },
       ),

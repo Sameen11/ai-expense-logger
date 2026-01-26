@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import '../snap/add_expense.dart';
 import '../../services/gemini_service.dart';
 
+import 'package:provider/provider.dart';
+import '../../providers/category_provider.dart';
+
 class ProcessingReceiptScreen extends StatefulWidget {
   final String imagePath;
   const ProcessingReceiptScreen({super.key, required this.imagePath});
@@ -13,69 +16,82 @@ class ProcessingReceiptScreen extends StatefulWidget {
       _ProcessingReceiptScreenState();
 }
 
-class _ProcessingReceiptScreenState extends State<ProcessingReceiptScreen> {
-  int _processingStep = 0;
-  final List<String> _steps = [
-    'Analyzing image...',
-    'Extracting text data...',
-    'Processing with AI...',
-    'Structuring results...',
-  ];
-
-  String? _errorMessage;
+class _ProcessingReceiptScreenState extends State<ProcessingReceiptScreen>
+    with SingleTickerProviderStateMixin {
   bool _isProcessing = true;
+  String? _errorMessage;
+  int _processingStep = 0;
+  late AnimationController _scannerController;
+
+  final List<String> _steps = [
+    'Analyzing Image Check...',
+    'Extracting Text Data...',
+    'Categorizing with AI...',
+  ];
 
   @override
   void initState() {
     super.initState();
-    _processReceiptWithGemini();
+    _scannerController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+
+    // Start processing after check
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _processReceiptWithGemini();
+    });
+  }
+
+  @override
+  void dispose() {
+    _scannerController.dispose();
+    super.dispose();
   }
 
   Future<void> _processReceiptWithGemini() async {
+    setState(() {
+      _isProcessing = true;
+      _errorMessage = null;
+      _processingStep = 0;
+    });
+
     try {
-      setState(() {
-        _isProcessing = true;
-        _errorMessage = null;
-      });
+      // Step 1: Analyzing image
+      await Future.delayed(const Duration(milliseconds: 800));
+      if (!mounted) return;
+      setState(() => _processingStep = 1);
 
-      // Animate through the steps with real processing
-      for (int i = 0; i < _steps.length; i++) {
-        if (mounted) {
-          setState(() {
-            _processingStep = i;
-          });
-        }
+      // Step 2: Extracting text data
+      await Future.delayed(const Duration(milliseconds: 800));
+      if (!mounted) return;
+      setState(() => _processingStep = 2);
 
-        // Add realistic delays for each step
-        if (i == 0) {
-          await Future.delayed(
-            const Duration(milliseconds: 800),
-          ); // Analyzing image
-        } else if (i == 1) {
-          await Future.delayed(
-            const Duration(milliseconds: 1000),
-          ); // Extracting text
-        } else if (i == 2) {
-          // This is where the actual API call happens
-          await Future.delayed(const Duration(milliseconds: 500));
-        }
-      }
+      // Step 3: Processing with AI (Actual API call)
+      // Fetch available categories
+      if (!mounted) return;
+      final categoryProvider = context.read<CategoryProvider>();
+      // categories must be a list of strings
+      final categories = categoryProvider
+          .getAllCategories()
+          .map((e) => e.name)
+          .toList();
 
-      // Call Gemini API
       final ReceiptData? receiptData = await GeminiService.processReceiptImage(
         widget.imagePath,
+        validCategories: categories,
       );
 
-      if (mounted) {
-        setState(() {
-          _processingStep = _steps.length;
-        });
-      }
+      if (!mounted) return;
 
-      await Future.delayed(const Duration(milliseconds: 500));
+      if (receiptData != null) {
+        // Step 4: Structuring results
+        setState(() => _processingStep = 3);
+        await Future.delayed(const Duration(milliseconds: 500));
 
-      if (receiptData != null && mounted) {
-        // Navigate to manual entry screen with full ReceiptData
+        if (!mounted) return;
+
+        // Navigate to AddExpenseScreen with extracted data
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -84,32 +100,18 @@ class _ProcessingReceiptScreenState extends State<ProcessingReceiptScreen> {
           ),
         );
       } else {
-        // Handle error case
-        if (mounted) {
-          setState(() {
-            _isProcessing = false;
-            _errorMessage =
-                'Failed to process receipt. Please try again or enter details manually.';
-          });
-        }
+        throw Exception('Failed to extract data from receipt.');
       }
     } catch (e) {
-      print('Error processing receipt: $e');
-      if (mounted) {
-        setState(() {
-          _isProcessing = false;
-          _errorMessage = 'Error: ${e.toString()}';
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _isProcessing = false;
+        _errorMessage = e.toString().replaceAll('Exception: ', '');
+      });
     }
   }
 
   void _retryProcessing() {
-    setState(() {
-      _processingStep = 0;
-      _errorMessage = null;
-      _isProcessing = true;
-    });
     _processReceiptWithGemini();
   }
 
@@ -128,7 +130,6 @@ class _ProcessingReceiptScreenState extends State<ProcessingReceiptScreen> {
       appBar: AppBar(
         backgroundColor: theme.scaffoldBackgroundColor,
         elevation: 0,
-        // Hide the back button while processing
         automaticallyImplyLeading: false,
       ),
       body: Center(
@@ -137,52 +138,94 @@ class _ProcessingReceiptScreenState extends State<ProcessingReceiptScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // 1. The Captured Image
-              Container(
-                height: 200,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  image: DecorationImage(
-                    image: FileImage(File(widget.imagePath)),
-                    fit: BoxFit.cover,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
+              // 1. The Captured Image with Scanner Effect
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    height: 300,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      image: DecorationImage(
+                        image: FileImage(File(widget.imagePath)),
+                        fit: BoxFit.cover,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                  if (_isProcessing)
+                    Positioned.fill(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: AnimatedBuilder(
+                          animation: _scannerController,
+                          builder: (context, child) {
+                            return FractionallySizedBox(
+                              heightFactor: 0.1, // Height of the scanner beam
+                              alignment: Alignment(
+                                0,
+                                _scannerController.value * 2 - 1,
+                              ),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      theme.colorScheme.primary.withOpacity(0),
+                                      theme.colorScheme.primary.withOpacity(
+                                        0.5,
+                                      ),
+                                      theme.colorScheme.primary.withOpacity(0),
+                                    ],
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: theme.colorScheme.primary
+                                          .withOpacity(0.5),
+                                      blurRadius: 10,
+                                      spreadRadius: 1,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(height: 30),
 
               if (_isProcessing) ...[
-                // 2. Loading Spinner
-                CircularProgressIndicator(
-                  color: theme.colorScheme.primary,
-                  strokeWidth: 2.5,
-                ),
-                const SizedBox(height: 10),
-
-                // 3. Title
+                // 3. Title (Removed spinner as scanner is enough)
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      'Processing with AI...',
+                      'AI Scanning...',
                       style: theme.textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: theme.colorScheme.onSurface,
                       ),
                     ),
                     const SizedBox(width: 8),
-                    const Text('🤖', style: TextStyle(fontSize: 22)),
+                    const Text('✨', style: TextStyle(fontSize: 22)),
                   ],
                 ),
+
+                // ... rest of the UI
                 const SizedBox(height: 8),
                 Text(
-                  'Using Google Gemini AI to extract data',
+                  'Using AI to extract data',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),

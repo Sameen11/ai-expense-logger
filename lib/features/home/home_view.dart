@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
 
-// import '../../common/colors.dart';
-
+import '../../core/theme/app_colors.dart';
 import '../../providers/expense_provider.dart';
 import '../../utils/currency_utils.dart';
 import '../../widgets/expense_list_item.dart';
@@ -12,6 +12,9 @@ import '../expenses/expenses_view.dart';
 import '../snap/snap_view.dart';
 import '../insights/insights_view.dart';
 import '../snap/add_expense.dart';
+import '../../services/export_service.dart';
+import '../../widgets/export_bottom_sheet.dart';
+import '../../widgets/notification_bar.dart';
 import '../authentication/provider/auth_provider.dart';
 
 class HomeView extends StatefulWidget {
@@ -68,53 +71,68 @@ class _HomeViewState extends State<HomeView> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withOpacity(0.1),
                   shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.waving_hand_rounded, // Changed icon to waving hand
-                  color: theme.colorScheme.primary,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Hello,',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
+                  color: theme.cardColor,
+                  image: DecorationImage(
+                    image:
+                        (authProvider.userProfile?.photoURL != null &&
+                            authProvider.userProfile!.photoURL!.isNotEmpty)
+                        ? NetworkImage(authProvider.userProfile!.photoURL!)
+                        : const AssetImage(
+                                'assets/pngs/profile_placeholder.png',
+                              )
+                              as ImageProvider,
+                    fit: BoxFit.cover,
                   ),
-                  Text(
-                    firstName,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.onBackground,
-                    ),
-                  ),
-                ],
+                  border: Border.all(color: theme.dividerColor, width: 0.5),
+                ),
+                child:
+                    (authProvider.userProfile?.photoURL == null ||
+                        authProvider.userProfile!.photoURL!.isEmpty)
+                    ? const Icon(Icons.person, color: Colors.grey)
+                    : null,
               ),
             ],
           ),
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: theme.cardColor,
-              image: const DecorationImage(
-                image: AssetImage(
-                  'assets/pngs/profile_placeholder.png',
-                ), // Placeholder or fallback
-                fit: BoxFit.cover,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Builder(
+                builder: (context) {
+                  final hour = DateTime.now().hour;
+                  String greeting;
+                  if (hour < 12) {
+                    greeting = 'GOOD MORNING 🌅';
+                  } else if (hour < 17) {
+                    greeting = 'GOOD AFTERNOON ☀️';
+                  } else if (hour < 21) {
+                    greeting = 'GOOD EVENING 🌆';
+                  } else {
+                    greeting = 'GOOD NIGHT 🌙';
+                  }
+
+                  return Text(
+                    greeting,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      letterSpacing: 1.2,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  );
+                },
               ),
-              border: Border.all(color: theme.dividerColor, width: 0.5),
-            ),
-            child: const Icon(Icons.person, color: Colors.grey),
+              Text(
+                firstName,
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  // Syne font applied via theme
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.onBackground,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -158,22 +176,18 @@ class _HomeViewState extends State<HomeView> {
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
-                theme.brightness == Brightness.dark
-                    ? theme.colorScheme.primary.withOpacity(0.8)
-                    : const Color(0xFF6B66FF),
-                theme.brightness == Brightness.dark
-                    ? theme.colorScheme.secondary.withOpacity(0.8)
-                    : const Color(0xFF8F8CFF),
+                AppColors.premiumCardGradientStart,
+                AppColors.premiumCardGradientEnd,
               ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(32), // More rounded
             boxShadow: [
               BoxShadow(
-                color: theme.colorScheme.primary.withOpacity(0.3),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
+                color: AppColors.primaryBrand.withOpacity(0.4),
+                blurRadius: 24,
+                offset: const Offset(0, 12),
               ),
             ],
           ),
@@ -183,117 +197,163 @@ class _HomeViewState extends State<HomeView> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
+                  // Month name
                   Text(
-                    'Total Spent in $monthName',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.9),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
+                    monthName.toUpperCase(),
+                    style: GoogleFonts.lexend(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.5,
                     ),
                   ),
+                  // Expense count badge
                   Container(
-                    padding: const EdgeInsets.all(4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.2),
-                      shape: BoxShape.circle,
+                      borderRadius: BorderRadius.circular(20),
                     ),
-                    child: const Icon(
-                      Icons.more_horiz,
-                      color: Colors.white,
-                      size: 20,
+                    child: Text(
+                      '${provider.expenses.length} expenses',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 30),
+              Text(
+                'Total Spent in $monthName',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.8),
+                  fontSize: 12,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 8),
               Text(
                 CurrencyUtils.formatAmount(amount, currency),
-                style: const TextStyle(
+                style: GoogleFonts.syne(
+                  // Explicitly use Syne for the big number
                   color: Colors.white,
-                  fontSize: 36,
+                  fontSize: 32,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-
-              if (hasTrend)
-                Container(
-                  margin: const EdgeInsets.symmetric(vertical: 8),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
+              const SizedBox(height: 30),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(trendIcon, color: Colors.white, size: 16),
-                      const SizedBox(width: 4),
                       Text(
-                        trendText,
+                        'BUDGET',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.6),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        CurrencyUtils.formatAmount(budget, currency),
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 12,
+                          fontSize: 14,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
                   ),
-                ),
-
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Daily Avg',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.7),
-                            fontSize: 12,
-                          ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'SAVED',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.6),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          CurrencyUtils.formatAmount(dailyAverage, currency),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        CurrencyUtils.formatAmount(saved, currency),
+                        style: TextStyle(
+                          color: saved >= 0
+                              ? Colors.greenAccent
+                              : Colors.redAccent,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Remaining',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.7),
-                            fontSize: 12,
-                          ),
+                  // Daily Average Indicator
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        'DAILY AVG',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.6),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          CurrencyUtils.formatAmount(saved, currency),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        CurrencyUtils.formatAmount(dailyAverage, currency),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      // Trend Indicator
+                      if (hasTrend) ...[
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
                           ),
-                          overflow: TextOverflow.ellipsis,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                trendIcon,
+                                color: isMore
+                                    ? const Color(0xFFFF453A)
+                                    : const Color(0xFF32D74B), // Red/Green
+                                size: 12,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                trendText,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
-                    ),
+                    ],
                   ),
                 ],
               ),
@@ -307,134 +367,88 @@ class _HomeViewState extends State<HomeView> {
   Widget _buildQuickActions(BuildContext context, ThemeData theme) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            'QUICK ACTIONS',
-            style: theme.textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: theme.colorScheme.onSurfaceVariant,
-              letterSpacing: 1.0,
+          _buildCircleAction(
+            context,
+            theme,
+            icon: Icons.add_rounded,
+            label: 'ADD',
+            onTap: () => NavigationManager.push(
+              context,
+              const AddExpenseManuallyScreen(),
+              type: TransitionType.platform,
             ),
           ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _buildQuickActionCard(
-                  context,
-                  theme,
-                  icon: Icons.camera_alt_rounded,
-                  label: 'Snap Receipt',
-                  color: Colors.blue,
-                  onTap: () =>
-                      NavigationManager.push(context, const SnapView()),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildQuickActionCard(
-                  context,
-                  theme,
-                  icon: Icons.add_rounded,
-                  label: 'Add Expense',
-                  color: const Color(0xFF6B66FF),
-                  onTap: () => NavigationManager.push(
-                    context,
-                    const AddExpenseManuallyScreen(),
-                    type: TransitionType.platform,
-                  ),
-                ),
-              ),
-            ],
+          _buildCircleAction(
+            context,
+            theme,
+            icon: Icons.upload_file_rounded, // Changed icon for Export
+            label: 'EXPORT',
+            onTap: () => _showExportOptions(context),
+            color: const Color(0xFFD1E4FF), // Light Blue
+            iconColor: AppColors.primaryBrand,
           ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _buildQuickActionCard(
-                  context,
-                  theme,
-                  icon: Icons.bar_chart_rounded,
-                  label: 'View Insights',
-                  color: Colors.purple,
-                  onTap: () =>
-                      NavigationManager.push(context, const InsightsView()),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildQuickActionCard(
-                  context,
-                  theme,
-                  icon: Icons.download_rounded,
-                  label: 'Export Data',
-                  color: Colors.orange,
-                  onTap: () {
-                    // Placeholder for export functionality
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Export feature coming soon!'),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
+          _buildCircleAction(
+            context,
+            theme,
+            icon: Icons.camera_alt_rounded,
+            label: 'SNAP', // Renamed from BILL
+            onTap: () => NavigationManager.push(context, const SnapView()),
+            color: const Color(0xFFFFEFD1), // Light Orange
+            iconColor: Colors.black,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildQuickActionCard(
+  Widget _buildCircleAction(
     BuildContext context,
     ThemeData theme, {
     required IconData icon,
     required String label,
-    required Color color,
     required VoidCallback onTap,
+    Color? color,
+    Color? iconColor,
   }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        decoration: BoxDecoration(
-          color: theme.cardColor,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.02),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+    final bgColor = color ?? theme.colorScheme.primary.withOpacity(0.1);
+    final fgColor = iconColor ?? theme.colorScheme.primary;
+
+    return Column(
+      children: [
+        InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(30),
+          child: Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: bgColor,
+              shape: BoxShape.circle,
+              boxShadow: color != null
+                  ? [
+                      BoxShadow(
+                        color: color.withOpacity(0.3),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ]
+                  : null,
             ),
-          ],
+            child: Icon(icon, color: fgColor, size: 28),
+          ),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: color, size: 24),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              label,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface,
-              ),
-            ),
-          ],
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: theme.textTheme.labelMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.5,
+          ),
         ),
-      ),
+      ],
     );
   }
 
@@ -445,18 +459,17 @@ class _HomeViewState extends State<HomeView> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            'RECENT ACTIVITY',
-            style: theme.textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: theme.colorScheme.onSurfaceVariant,
-              letterSpacing: 1.0,
+            'Last Transactions',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              //Syne applied via header
             ),
           ),
           TextButton(
             onPressed: () =>
                 NavigationManager.push(context, const ExpensesView()),
             child: Text(
-              'See All',
+              'View all',
               style: TextStyle(
                 color: theme.colorScheme.primary,
                 fontWeight: FontWeight.w600,
@@ -472,7 +485,7 @@ class _HomeViewState extends State<HomeView> {
   Widget _buildRecentActivityList(BuildContext context, ThemeData theme) {
     return Consumer<ExpenseProvider>(
       builder: (context, provider, _) {
-        final expenses = provider.expensesForSelectedMonth;
+        final expenses = provider.expenses; // Use all expenses for "recent"
         if (expenses.isEmpty) {
           return Center(
             child: Padding(
@@ -488,39 +501,71 @@ class _HomeViewState extends State<HomeView> {
         // Show top 5 or fewer
         final recentExpenses = expenses.take(5).toList();
 
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 20),
-          decoration: BoxDecoration(
-            color: theme.cardColor,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.03),
-                offset: const Offset(0, 4),
-                blurRadius: 16,
-              ),
-            ],
-          ),
-          child: ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            padding: EdgeInsets.zero,
-            itemCount: recentExpenses.length,
-            separatorBuilder: (context, index) => Divider(
-              height: 1,
-              color: theme.dividerColor.withOpacity(0.1),
-              indent: 16,
-              endIndent: 16,
-            ),
-            itemBuilder: (context, index) {
-              return ExpenseListItem(
+        return ListView.builder(
+          // Removed container for cleaner look
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          itemCount: recentExpenses.length,
+          itemBuilder: (context, index) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: ExpenseListItem(
                 expense: recentExpenses[index],
-                hasContainer: false,
-              );
-            },
-          ),
+                hasContainer: true, // Use internal container
+              ),
+            );
+          },
         );
       },
     );
+  }
+
+  Future<void> _showExportOptions(BuildContext context) async {
+    final format = await showExportBottomSheet(context);
+    if (format != null) {
+      if (!mounted) return;
+      final provider = Provider.of<ExpenseProvider>(context, listen: false);
+      final expenses = provider.expensesForSelectedMonth;
+
+      if (expenses.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No expenses to export for this month')),
+        );
+        return;
+      }
+
+      try {
+        // Show loading indicator
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Generating export...')));
+
+        final dateStr = DateFormat('MMM_yyyy').format(provider.selectedMonth);
+        await ExportService().exportExpenses(
+          expenses,
+          'expenses_$dateStr',
+          format,
+        );
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Export successful!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Export failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }

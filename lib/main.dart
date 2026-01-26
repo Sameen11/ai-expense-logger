@@ -96,7 +96,14 @@ class MyApp extends StatelessWidget {
             return previousExpenses;
           },
         ),
-        ChangeNotifierProvider(create: (_) => CategoryProvider()),
+        ChangeNotifierProvider(
+          create: (context) {
+            final provider = CategoryProvider();
+            // Seed categories on first launch (checks if already seeded)
+            provider.seedDefaultCategories();
+            return provider;
+          },
+        ),
         // Add ThemeProvider
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
       ],

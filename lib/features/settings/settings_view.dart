@@ -1,4 +1,4 @@
-// import 'package:ai_expense_logger/common/colors.dart';
+import 'package:ai_expense_logger/core/theme/app_colors.dart';
 import 'package:ai_expense_logger/features/authentication/provider/auth_provider.dart';
 import 'package:ai_expense_logger/features/upgrade/premium_view.dart';
 import 'package:flutter/material.dart';
@@ -136,40 +136,20 @@ class _SettingsViewState extends State<SettingsView> {
                 _SettingsOption(
                   icon: const _SettingsIcon(
                     icon: Icons.account_balance_wallet_rounded,
-                    color: Colors.green,
+                    color: AppColors.secondaryBrand, // Updated to brand color
                   ),
                   title: 'Monthly Budget',
                   onTap: () => _showUpdateBudgetDialog(context),
                 ),
-                // _SettingsTextValueOption(
-                //   // --- NEW ICON ---
-                //   icon: const _SettingsIcon(
-                //     icon: Icons.attach_money_rounded,
-                //     color: Colors.green,
-                //   ),
-                //   title: 'Currency',
-                //   value: 'USD',
-                //   onTap: () {
-                //     // Handle currency tap
-                //   },
-                // ),
-                // const _SettingsToggleOption(
-                //   icon: _SettingsIcon(
-                //     icon: Icons.data_usage_rounded,
-                //     color: Colors.blue,
-                //   ),
-                //   title: 'Keep Data Local Only',
-                // ),
               ],
             ),
             const _SettingsSectionHeader(title: 'EXPORT'),
             _SettingsGroup(
               children: [
                 _SettingsOption(
-                  // --- NEW ICON ---
                   icon: const _SettingsIcon(
                     icon: Icons.upload_file_rounded,
-                    color: Color(0xFF007AFF), // iOS Blue
+                    color: AppColors.primaryBrand, // Updated to brand color
                   ),
                   title: 'Export All Data',
                   onTap: _showExportOptions,
@@ -180,48 +160,24 @@ class _SettingsViewState extends State<SettingsView> {
             _SettingsGroup(
               children: [
                 _SettingsOption(
-                  // --- NEW ICON ---
                   icon: const _SettingsIcon(
                     icon: Icons.shield_rounded,
-                    color: Colors.blueGrey,
+                    color: AppColors.darkTextSecondary, // Updated to subtle
                   ),
                   title: 'Privacy Policy',
                   onTap: () {
                     _openUrl();
                   },
                 ),
-                // _SettingsOption(
-                //   // --- NEW ICON ---
-                //   icon: const _SettingsIcon(
-                //     icon: Icons.article_rounded,
-                //     color: Colors.grey,
-                //   ),
-                //   title: 'Terms of Service',
-                //   onTap: () {
-                //     // Handle terms tap
-                //   },
-                // ),
               ],
             ),
             const _SettingsSectionHeader(title: 'SUPPORT'),
             _SettingsGroup(
               children: [
-                // _SettingsOption(
-                //   // --- NEW ICON ---
-                //   icon: const _SettingsIcon(
-                //     icon: Icons.help_outline_rounded,
-                //     color: Colors.purple,
-                //   ),
-                //   title: 'Help & FAQ',
-                //   onTap: () {
-                //     // Handle help tap
-                //   },
-                // ),
                 _SettingsOption(
-                  // --- NEW ICON ---
                   icon: const _SettingsIcon(
                     icon: Icons.email_rounded,
-                    color: Colors.redAccent,
+                    color: AppColors.darkError, // Updated to error/accent
                   ),
                   title: 'Contact Us',
                   onTap: () {
@@ -233,7 +189,75 @@ class _SettingsViewState extends State<SettingsView> {
             ),
             // Sign Out Button Group
             const SizedBox(height: 20),
-            _SettingsGroup(children: const [_SignOutTile()]),
+            // Account Actions
+            const SizedBox(height: 20),
+            _SettingsGroup(
+              children: [
+                const _SignOutTile(),
+                ListTile(
+                  title: const Center(
+                    child: Text(
+                      'Delete Account',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  onTap: () {
+                    // Show confirmation dialog before deleting
+                    showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Delete Account?'),
+                        content: const Text(
+                          'This action is permanent and cannot be undone. All your data will be erased.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('Cancel'),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              // Perform delete action
+                              Navigator.pop(context); // Close dialog
+
+                              try {
+                                await context
+                                    .read<AuthProvider>()
+                                    .deleteAccount();
+                                if (context.mounted) {
+                                  // AuthProvider handles state, but we can make sure we go to login
+                                  // The auth listener in App or NavManager should handle the redirect usually,
+                                  // but explicitly popping/pushing ensures smooth UX.
+                                  Navigator.of(
+                                    context,
+                                  ).popUntil((route) => route.isFirst);
+                                  // Assuming root is AuthWrapper or Login
+                                }
+                              } catch (e) {
+                                if (context.mounted) {
+                                  SnackBarUtils.showError(
+                                    context,
+                                    'Failed to delete account: ${e.toString().replaceAll("Exception: ", "")}',
+                                  );
+                                }
+                              }
+                            },
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.red,
+                            ),
+                            child: const Text('Delete'),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
             const SizedBox(height: 40), // Extra space at the bottom
           ],
         ),
@@ -532,17 +556,32 @@ class _UserProfileSection extends StatelessWidget {
               ? user!.email![0].toUpperCase()
               : '??');
 
+    final photoURL = authProvider.userProfile?.photoURL;
+
     return ListTile(
-      leading: CircleAvatar(
-        radius: 24,
-        backgroundColor: Colors.blue,
-        child: Text(
-          initials,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
+      leading: Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: theme.colorScheme.primary,
+          image: (photoURL != null && photoURL.isNotEmpty)
+              ? DecorationImage(
+                  image: NetworkImage(photoURL),
+                  fit: BoxFit.cover,
+                )
+              : null,
         ),
+        alignment: Alignment.center,
+        child: (photoURL == null || photoURL.isEmpty)
+            ? Text(
+                initials,
+                style: TextStyle(
+                  color: theme.colorScheme.onPrimary,
+                  fontWeight: FontWeight.bold,
+                ),
+              )
+            : null,
       ),
       title: Text(
         name,

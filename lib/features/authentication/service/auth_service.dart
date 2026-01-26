@@ -18,7 +18,10 @@ class AuthService {
   User? get currentUser => _firebaseAuth.currentUser;
 
   // Sign in with email and password.
-  Future<UserCredential> signInWithEmailAndPassword(String email, String password) async {
+  Future<UserCredential> signInWithEmailAndPassword(
+    String email,
+    String password,
+  ) async {
     try {
       final userCredential = await _firebaseAuth.signInWithEmailAndPassword(
         email: email,
@@ -28,7 +31,9 @@ class AuthService {
       // --- ADDED ---
       // After successful sign-in, check and create Firestore doc if needed
       if (userCredential.user != null) {
-        await _firestoreService.checkAndCreateUserDocument(userCredential.user!);
+        await _firestoreService.checkAndCreateUserDocument(
+          userCredential.user!,
+        );
       }
 
       return userCredential;
@@ -39,7 +44,10 @@ class AuthService {
   }
 
   // Sign up with email and password.
-  Future<UserCredential> createUserWithEmailAndPassword(String email, String password) async {
+  Future<UserCredential> createUserWithEmailAndPassword(
+    String email,
+    String password,
+  ) async {
     try {
       final userCredential = await _firebaseAuth.createUserWithEmailAndPassword(
         email: email,
@@ -76,7 +84,7 @@ class AuthService {
   Future<bool> ensureDemoUserExists() async {
     const demoEmail = 'demo@expenselogger.com';
     const demoPassword = 'demo123';
-    
+
     try {
       // Try to sign in with demo credentials
       await _firebaseAuth.signInWithEmailAndPassword(
@@ -90,19 +98,20 @@ class AuthService {
       if (e.code == 'user-not-found') {
         // Demo user doesn't exist, create it
         try {
-          final userCredential = await _firebaseAuth.createUserWithEmailAndPassword(
-            email: demoEmail,
-            password: demoPassword,
-          );
-          
+          final userCredential = await _firebaseAuth
+              .createUserWithEmailAndPassword(
+                email: demoEmail,
+                password: demoPassword,
+              );
+
           // Update display name
           await userCredential.user?.updateDisplayName('Demo User');
-          
+
           // Create Firestore document
           if (userCredential.user != null) {
             await _firestoreService.createUserDocument(userCredential.user!);
           }
-          
+
           await _firebaseAuth.signOut(); // Sign out immediately
           return true;
         } catch (createError) {
@@ -122,6 +131,7 @@ class AuthService {
     required String newEmail,
     String? newPhoneNumber,
     String? newPhoneCountryCode,
+    String? newPhotoURL, // ⭐️ ADD THIS
   }) async {
     final user = _firebaseAuth.currentUser;
     if (user == null) {
@@ -136,6 +146,11 @@ class AuthService {
         await user.updateDisplayName(newName);
       }
 
+      // Update Photo URL in Auth
+      if (newPhotoURL != null && newPhotoURL != user.photoURL) {
+        await user.updatePhotoURL(newPhotoURL);
+      }
+
       // Update Email in Auth (sensitive operation)
       if (newEmail != user.email) {
         await user.updateEmail(newEmail);
@@ -146,7 +161,8 @@ class AuthService {
         'displayName': newName,
         'email': newEmail,
         'phoneNumber': newPhoneNumber, // Will be null or a value
-        'phoneCountryCode': newPhoneCountryCode, // ⭐️ ADD THIS
+        'phoneCountryCode': newPhoneCountryCode,
+        'photoURL': newPhotoURL, // ⭐️ ADD THIS
       };
 
       // Remove any keys where the value is null, just in case
@@ -164,12 +180,43 @@ class AuthService {
       if (e.code == 'requires-recent-login') {
         // Provide a more specific error message for this common case
         throw Exception(
-            'This change requires you to sign in again. Please log out and log back in to update your email.');
+          'This change requires you to sign in again. Please log out and log back in to update your email.',
+        );
       }
       // Re-throw other errors to be handled by our helper
       throw _handleAuthException(e);
     } catch (e) {
       rethrow; // Re-throw any other errors
+    }
+  }
+
+  /// Deletes the user's account and data.
+  ///
+  /// 1. Deletes Firestore data.
+  /// 2. Deletes Firebase Auth account.
+  Future<void> deleteAccount() async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) {
+      throw Exception('No user logged in.');
+    }
+
+    try {
+      // 1. Delete Firestore Data
+      await _firestoreService.deleteUserData(user.uid);
+
+      // 2. Delete Auth Account
+      // Note: This requires recent login. If the user hasn't logged in recently,
+      // it will throw a 'requires-recent-login' error.
+      await user.delete();
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'requires-recent-login') {
+        throw Exception(
+          'For security, you must re-authenticate to delete your account. Please log out and back in.',
+        );
+      }
+      throw _handleAuthException(e);
+    } catch (e) {
+      rethrow;
     }
   }
 
@@ -195,4 +242,3 @@ class AuthService {
     }
   }
 }
-

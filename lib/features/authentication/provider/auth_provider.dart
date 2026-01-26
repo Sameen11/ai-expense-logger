@@ -125,11 +125,13 @@ class AuthProvider with ChangeNotifier {
   }
 
   /// Updates the user's profile.
+  /// Updates the user's profile.
   Future<void> updateUserProfile({
     required String newName,
     required String newEmail,
     String? newPhoneNumber,
-    String? newPhoneCountryISOCode, // ⭐️ ADD THIS
+    String? newPhoneCountryISOCode,
+    String? newPhotoURL, // ⭐️ ADD THIS
   }) async {
     _isLoading = true;
     _errorMessage = null;
@@ -139,7 +141,8 @@ class AuthProvider with ChangeNotifier {
         newName: newName,
         newEmail: newEmail,
         newPhoneNumber: newPhoneNumber,
-        newPhoneCountryCode: newPhoneCountryISOCode, // ⭐️ PASS IT
+        newPhoneCountryCode: newPhoneCountryISOCode,
+        newPhotoURL: newPhotoURL, // ⭐️ PASS IT
       );
 
       // ⭐️ Manually update the local user object and profile
@@ -149,6 +152,7 @@ class AuthProvider with ChangeNotifier {
         email: newEmail,
         phoneNumber: newPhoneNumber,
         phoneCountryCode: newPhoneCountryISOCode,
+        photoURL: newPhotoURL,
       );
     } catch (e) {
       _errorMessage = e.toString();
@@ -179,6 +183,15 @@ class AuthProvider with ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// Deletes the user's account and data.
+  Future<void> deleteAccount() async {
+    await _callAuthMethod(() async {
+      await _authService.deleteAccount();
+      _user = null;
+      _userProfile = null;
+    });
   }
 
   // Method to clear error messages, useful for the UI.

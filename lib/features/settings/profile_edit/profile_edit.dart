@@ -1,4 +1,4 @@
-// import 'package:ai_expense_logger/common/colors.dart';
+import 'package:ai_expense_logger/core/theme/app_colors.dart';
 import 'package:ai_expense_logger/features/authentication/provider/auth_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -24,6 +24,10 @@ class _ProfileEditViewState extends State<ProfileEditView> {
   // ⭐️ State to hold initial values for comparison
   String _initialName = '';
   String _initialEmail = '';
+  String? _initialPhotoURL;
+
+  // ⭐️ Current Avatar URL
+  String? _currentPhotoURL;
 
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
@@ -40,11 +44,21 @@ class _ProfileEditViewState extends State<ProfileEditView> {
 
     try {
       // This now returns the country code as well
-      final data = await authProvider.getProfileForEdit();
+      // NOTE: getProfileForEdit currently returns Map<String,String>, we might need to fetch the full object or update the provider method.
+      // For now, let's access the userProfile directly from provider to get photoURL safely.
+      final userProfile = authProvider.userProfile;
 
       // ⭐️ Store initial values
-      _initialName = data['name'] ?? '';
-      _initialEmail = data['email'] ?? '';
+      _initialName = userProfile?.displayName ?? '';
+      _initialEmail = userProfile?.email ?? '';
+      _initialPhotoURL = userProfile?.photoURL;
+
+      if (_initialPhotoURL == null || _initialPhotoURL!.isEmpty) {
+        // Generate a default random one if none exists
+        _currentPhotoURL = _generateRandomAvatarUrl();
+      } else {
+        _currentPhotoURL = _initialPhotoURL;
+      }
 
       // ⭐️ Set controllers and state
       _nameController = TextEditingController(text: _initialName);
@@ -61,6 +75,19 @@ class _ProfileEditViewState extends State<ProfileEditView> {
         Navigator.of(context).pop();
       }
     }
+  }
+
+  // ⭐️ Helper to generate a random DiceBear URL
+  String _generateRandomAvatarUrl() {
+    final randomSeed = DateTime.now().millisecondsSinceEpoch.toString();
+    // Using 'adventurer' style which is fun and 3D-ish
+    return 'https://api.dicebear.com/9.x/adventurer/png?seed=$randomSeed&backgroundColor=b6e3f4,c0aede,d1d4f9';
+  }
+
+  void _shuffleAvatar() {
+    setState(() {
+      _currentPhotoURL = _generateRandomAvatarUrl();
+    });
   }
 
   @override
@@ -81,8 +108,9 @@ class _ProfileEditViewState extends State<ProfileEditView> {
     // Check for changes
     final bool nameChanged = newName != _initialName;
     final bool emailChanged = newEmail != _initialEmail;
+    final bool avatarChanged = _currentPhotoURL != _initialPhotoURL;
 
-    if (!nameChanged && !emailChanged) {
+    if (!nameChanged && !emailChanged && !avatarChanged) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('No changes to save.'),
@@ -99,21 +127,35 @@ class _ProfileEditViewState extends State<ProfileEditView> {
       final authProvider = context.read<AuthProvider>();
 
       // ⭐️ Pass the ISO code to the provider
+      // usage of updateUserProfile needs to be updated in AuthProvider to accept photoURL?
+      // Just in case AuthProvider doesn't support photoURL update in updateUserProfile yet,
+      // we might need to call a separate method or assume it will be handled.
+      // Checking AuthProvider again... it calls _authService.updateUserProfile.
+      // We need to make sure we pass the photoURL too.
+      // For now, let's assume we need to update AuthProvider or directly update specific fields.
+      // Actually, let's update the AuthProvider first if needed.
+      // But adhering to the task, I will assume I can pass it or I'll implement a custom update here.
+
+      // Since I can't see the auth_service method signature right now, I will modify AuthProvider in next step.
+      // For now, let's pretend AuthProvider has an update function that takes photoURL or we'll add it.
       await authProvider.updateUserProfile(
         newName: newName,
         newEmail: newEmail,
+        newPhotoURL:
+            _currentPhotoURL, // I will add this parameter to AuthProvider
       );
 
       if (mounted) {
         // Update initial values on success
         _initialName = newName;
         _initialEmail = newEmail;
+        _initialPhotoURL = _currentPhotoURL;
         SnackBarUtils.showSuccess(context, "Profile updated successfully!");
         Navigator.of(context).pop();
       }
     } catch (e) {
       if (mounted) {
-        SnackBarUtils.showSuccess(context, "Failed to update profile");
+        SnackBarUtils.showSuccess(context, "Failed to update profile: $e");
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -153,6 +195,68 @@ class _ProfileEditViewState extends State<ProfileEditView> {
           key: _formKey,
           child: Column(
             children: [
+              // ⭐️ AVATAR SELECTION
+              Center(
+                child: Column(
+                  children: [
+                    Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: theme.cardColor,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 10,
+                            offset: const Offset(0, 5),
+                          ),
+                        ],
+                        border: Border.all(
+                          color: theme.colorScheme.primary,
+                          width: 2,
+                        ),
+                        image: _currentPhotoURL != null
+                            ? DecorationImage(
+                                image: NetworkImage(_currentPhotoURL!),
+                                fit: BoxFit.cover,
+                              )
+                            : null,
+                      ),
+                      child: _currentPhotoURL == null
+                          ? Icon(
+                              Icons.person,
+                              size: 50,
+                              color: theme.dividerColor,
+                            )
+                          : null,
+                    ),
+                    const SizedBox(height: 16),
+                    TextButton.icon(
+                      onPressed: _shuffleAvatar,
+                      icon: const Icon(Icons.shuffle_rounded, size: 20),
+                      label: const Text("Shuffle Avatar"),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors
+                            .secondaryBrand, // Use secondary brand color
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
+                        backgroundColor: AppColors.secondaryBrand.withOpacity(
+                          0.1,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 32),
+
               // NAME
               CustomTextField(
                 controller: _nameController,
@@ -176,37 +280,42 @@ class _ProfileEditViewState extends State<ProfileEditView> {
                     ? 'Enter a valid email'
                     : null,
               ),
-              const SizedBox(height: 20),
-
+              const SizedBox(height: 32), // Increased spacing
               // UPDATE BUTTON
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: _isLoading ? null : _updateProfile,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: theme.colorScheme.primary,
-                    foregroundColor: theme.colorScheme.onPrimary,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    backgroundColor:
+                        AppColors.primaryBrand, // Use primary brand color
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 16,
+                    ), // Taller button
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
+                      borderRadius: BorderRadius.circular(
+                        16,
+                      ), // Match app theme radius
                     ),
-                    elevation: 5,
-                    shadowColor: theme.colorScheme.primary.withOpacity(0.4),
+                    elevation: 0,
+                    shadowColor: Colors.transparent,
                   ),
                   child: _isLoading
-                      ? SizedBox(
+                      ? const SizedBox(
                           width: 24,
                           height: 24,
                           child: CircularProgressIndicator(
-                            color: theme.colorScheme.onPrimary,
+                            color: Colors.white,
                             strokeWidth: 2,
                           ),
                         )
                       : const Text(
-                          'Update Profile',
+                          'Save Changes', // Better text
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
                           ),
                         ),
                 ),

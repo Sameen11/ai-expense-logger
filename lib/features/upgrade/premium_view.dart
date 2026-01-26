@@ -41,10 +41,10 @@ class _PremiumScreenState extends State<PremiumScreen> {
               margin: const EdgeInsets.all(12.0),
               padding: const EdgeInsets.all(24.0),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
+                gradient: LinearGradient(
                   colors: [
-                    Color(0xFF8e44ad), // Purple
-                    Color(0xFFc0392b), // Reddish
+                    Theme.of(context).colorScheme.primary,
+                    Theme.of(context).colorScheme.secondary,
                   ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -65,10 +65,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                   SizedBox(height: 8),
                   Text(
                     'Unlimited tracking & advanced features',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                    ),
+                    style: TextStyle(color: Colors.white, fontSize: 16),
                   ),
                 ],
               ),
@@ -77,7 +74,10 @@ class _PremiumScreenState extends State<PremiumScreen> {
 
             // Features List
             _buildFeatureItem('Unlimited Receipts', 'No monthly limits'),
-            _buildFeatureItem('Advanced Exports', 'PDF, Excel with receipt images'),
+            _buildFeatureItem(
+              'Advanced Exports',
+              'PDF, Excel with receipt images',
+            ),
             _buildFeatureItem('Custom Categories', 'Unlimited custom tags'),
             _buildFeatureItem('Team Sharing', 'Up to 3 Users'),
             _buildFeatureItem('Priority Support', 'Email support within 24h'),
@@ -94,7 +94,8 @@ class _PremiumScreenState extends State<PremiumScreen> {
                     price: '\$99',
                     duration: '/year',
                     saveText: 'SAVE 17%',
-                    isSelected: _selectedSubscription == SubscriptionType.annual,
+                    isSelected:
+                        _selectedSubscription == SubscriptionType.annual,
                   ),
                   const SizedBox(height: 16),
                   _buildSubscriptionOption(
@@ -102,7 +103,8 @@ class _PremiumScreenState extends State<PremiumScreen> {
                     title: 'Monthly',
                     price: '\$9.99',
                     duration: '/month',
-                    isSelected: _selectedSubscription == SubscriptionType.monthly,
+                    isSelected:
+                        _selectedSubscription == SubscriptionType.monthly,
                   ),
                 ],
               ),
@@ -117,10 +119,14 @@ class _PremiumScreenState extends State<PremiumScreen> {
                 child: ElevatedButton(
                   onPressed: () {
                     // Handle start free trial
-                    print('Start 7-Day Free Trial selected for $_selectedSubscription');
+                    print(
+                      'Start 7-Day Free Trial selected for $_selectedSubscription',
+                    );
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue, // Button color
+                    backgroundColor: Theme.of(
+                      context,
+                    ).colorScheme.primary, // Button color
                     padding: const EdgeInsets.symmetric(vertical: 16.0),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12.0),
@@ -209,16 +215,20 @@ class _PremiumScreenState extends State<PremiumScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.blue : Colors.white,
+          color: isSelected
+              ? Theme.of(context).colorScheme.primary
+              : Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(12.0),
           border: Border.all(
-            color: isSelected ? Colors.blue : Colors.grey.shade300,
+            color: isSelected
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).dividerColor,
             width: 2,
           ),
           boxShadow: [
             if (isSelected)
               BoxShadow(
-                color: Colors.blue.withOpacity(0.2),
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
                 spreadRadius: 2,
                 blurRadius: 5,
                 offset: const Offset(0, 3),

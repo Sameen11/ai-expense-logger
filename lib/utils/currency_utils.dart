@@ -7,7 +7,7 @@ class CurrencyUtils {
     'GBP': '£',
     'JPY': '¥',
     'CNY': '¥',
-    
+
     // South Asian
     'PKR': 'Rs',
     'INR': '₹',
@@ -15,7 +15,7 @@ class CurrencyUtils {
     'LKR': 'Rs',
     'NPR': 'Rs',
     'AFN': '؋',
-    
+
     // Middle East & Gulf
     'AED': 'د.إ',
     'SAR': '﷼',
@@ -28,7 +28,7 @@ class CurrencyUtils {
     'EGP': '£',
     'IRR': '﷼',
     'IQD': 'ع.د',
-    
+
     // Turkish & Central Asian
     'TRY': '₺',
     'KZT': '₸',
@@ -38,7 +38,7 @@ class CurrencyUtils {
     'AZN': '₼',
     'AMD': '֏',
     'GEL': '₾',
-    
+
     // Southeast Asian
     'SGD': 'S\$',
     'MYR': 'RM',
@@ -49,13 +49,13 @@ class CurrencyUtils {
     'MMK': 'K',
     'LAK': '₭',
     'KHR': '៛',
-    
+
     // East Asian
     'KRW': '₩',
     'TWD': 'NT\$',
     'HKD': 'HK\$',
     'MOP': 'MOP\$',
-    
+
     // European
     'CHF': 'CHF',
     'SEK': 'kr',
@@ -69,7 +69,7 @@ class CurrencyUtils {
     'HRK': 'kn',
     'RUB': '₽',
     'UAH': '₴',
-    
+
     // Americas
     'CAD': 'C\$',
     'MXN': '\$',
@@ -78,12 +78,12 @@ class CurrencyUtils {
     'CLP': '\$',
     'COP': '\$',
     'PEN': 'S/',
-    
+
     // Oceania
     'AUD': 'A\$',
     'NZD': 'NZ\$',
     'FJD': 'FJ\$',
-    
+
     // African
     'ZAR': 'R',
     'NGN': '₦',
@@ -107,7 +107,11 @@ class CurrencyUtils {
   }
 
   /// Format amount with currency symbol
-  static String formatAmount(double amount, String currencyCode, {bool forPdf = false}) {
+  static String formatAmount(
+    double amount,
+    String currencyCode, {
+    bool forPdf = false,
+  }) {
     if (forPdf) {
       // For PDF export, use currency code instead of symbols to avoid font issues
       return '${amount.toStringAsFixed(2)} $currencyCode';
@@ -117,7 +121,11 @@ class CurrencyUtils {
   }
 
   /// Format amount with currency symbol (short version without decimals)
-  static String formatAmountShort(double amount, String currencyCode, {bool forPdf = false}) {
+  static String formatAmountShort(
+    double amount,
+    String currencyCode, {
+    bool forPdf = false,
+  }) {
     if (forPdf) {
       if (amount >= 1000) {
         return '${(amount / 1000).toStringAsFixed(1)}k $currencyCode';
@@ -130,6 +138,9 @@ class CurrencyUtils {
     }
     return '$symbol${amount.toStringAsFixed(0)}';
   }
+
+  /// Format amount compactly (e.g. $1.2k)
+  static String formatCompactAmount(double amount, String currencyCode) {
+    return formatAmountShort(amount, currencyCode);
+  }
 }
-
-

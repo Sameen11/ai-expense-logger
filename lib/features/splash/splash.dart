@@ -13,7 +13,8 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   final prefs = SharedPrefService();
@@ -40,7 +41,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
           OnboardingScreen(), // The new page you want to show
           type: TransitionType.slideFromRight, // Specify the transition
         );
-      }else{
+      } else {
         NavigationManager.pushReplacement(
           context,
           const AuthWrapper(), // The new page you want to show
@@ -62,7 +63,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [Colors.blue.shade400, Colors.blue.shade800],
+            colors: [
+              Theme.of(context).colorScheme.primary,
+              Theme.of(context).colorScheme.tertiary,
+            ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -74,18 +78,25 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Image.asset("assets/logo.png", height: 120)
+                  borderRadius: BorderRadius.circular(16),
+                  child: Image.asset("assets/logo.png", height: 120),
                 ),
                 // const Icon(Icons.shopping_bag_outlined, size: 120, color: Colors.white),
                 const SizedBox(height: 24),
                 const Text(
                   'ExpenseMind',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 2.0),
+                  style: TextStyle(
+                    fontSize: 30,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: 2.0,
+                  ),
                 ),
                 const SizedBox(height: 80),
-                const CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.white))
+                const CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
               ],
             ),
           ),

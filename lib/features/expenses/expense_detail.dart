@@ -1,26 +1,35 @@
+import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
+import 'package:ai_expense_logger/widgets/digital_receipt.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../models/expense.dart';
-import '../../providers/category_provider.dart';
 import '../../providers/expense_provider.dart';
 import '../../utils/currency_utils.dart';
-// import '../../common/colors.dart';
 import '../snap/add_expense.dart';
 
-class ExpenseDetailScreen extends StatelessWidget {
+class ExpenseDetailScreen extends StatefulWidget {
   final Expense expense;
   const ExpenseDetailScreen({super.key, required this.expense});
 
+  @override
+  State<ExpenseDetailScreen> createState() => _ExpenseDetailScreenState();
+}
+
+class _ExpenseDetailScreenState extends State<ExpenseDetailScreen> {
+  final GlobalKey _receiptKey = GlobalKey();
+
   // Helper function to get emoji for expense with fallback
   String _getEmojiForExpense(Expense expense) {
-    // Check if emoji is valid (not null, not empty, and not just whitespace)
     if (expense.emoji != null && expense.emoji!.trim().isNotEmpty) {
-      // Check if it's a valid emoji (not a single character that might be a cross)
       final emoji = expense.emoji!.trim();
-      // If it's a valid emoji string, return it
       if (emoji.length > 0 &&
           emoji != '×' &&
           emoji != '✕' &&
@@ -31,7 +40,6 @@ class ExpenseDetailScreen extends StatelessWidget {
       }
     }
 
-    // Fallback to category-based emoji
     final categoryEmojiMap = {
       'Food & Drinks': '🍜',
       'Groceries': '🥬',
@@ -53,7 +61,6 @@ class ExpenseDetailScreen extends StatelessWidget {
       return categoryEmoji;
     }
 
-    // Final fallback
     return '📦';
   }
 
@@ -61,7 +68,8 @@ class ExpenseDetailScreen extends StatelessWidget {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => AddExpenseManuallyScreen(expenseToEdit: expense),
+        builder: (context) =>
+            AddExpenseManuallyScreen(expenseToEdit: widget.expense),
       ),
     );
   }
@@ -87,7 +95,7 @@ class ExpenseDetailScreen extends StatelessWidget {
 
     if (confirmed == true && context.mounted) {
       try {
-        await context.read<ExpenseProvider>().deleteExpense(expense.id!);
+        await context.read<ExpenseProvider>().deleteExpense(widget.expense.id!);
         if (context.mounted) {
           Navigator.pop(context); // Pop detail screen
           ScaffoldMessenger.of(
@@ -107,26 +115,27 @@ class ExpenseDetailScreen extends StatelessWidget {
   Future<void> _handleDuplicate(BuildContext context) async {
     try {
       await context.read<ExpenseProvider>().addExpense(
-        merchant: "${expense.merchant} (Copy)",
-        amount: expense.amount,
-        date: DateTime.now(), // Set to current time or keep original?
-        category: expense.category,
-        emoji: expense.emoji ?? '📦',
-        notes: expense.notes,
-        currency: expense.currency,
-        items: expense.items,
-        subtotal: expense.subtotal,
-        tax: expense.tax,
-        tip: expense.tip,
-        discount: expense.discount,
-        invoiceNumber: expense.invoiceNumber,
+        merchant: "${widget.expense.merchant} (Copy)",
+        amount: widget.expense.amount,
+        date: DateTime.now(),
+        category: widget.expense.category,
+        emoji: widget.expense.emoji ?? '📦',
+        notes: widget.expense.notes,
+        currency: widget.expense.currency,
+        items: widget.expense.items,
+        subtotal: widget.expense.subtotal,
+        tax: widget.expense.tax,
+        tip: widget.expense.tip,
+        discount: widget.expense.discount,
+        invoiceNumber: widget.expense.invoiceNumber,
+        receiptPath: widget.expense.receiptPath,
       );
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Expense duplicated successfully!")),
         );
-        Navigator.pop(context); // Go back to list to see the duplicate
+        Navigator.pop(context);
       }
     } catch (e) {
       if (context.mounted) {
@@ -137,30 +146,64 @@ class ExpenseDetailScreen extends StatelessWidget {
     }
   }
 
-  void _handleShare(BuildContext context) {
-    final dateStr = DateFormat('MMM dd, yyyy').format(expense.date);
+  Future<void> _handleShare(BuildContext context) async {
+    try {
+      // 1. Capture the widget as an image using RepaintBoundary
+      RenderRepaintBoundary? boundary =
+          _receiptKey.currentContext?.findRenderObject()
+              as RenderRepaintBoundary?;
+
+      if (boundary == null) {
+        // Fallback to text share if boundary not found (e.g. not rendered yet)
+        _shareTextFallback();
+        return;
+      }
+
+      // Convert to image
+      ui.Image image = await boundary.toImage(pixelRatio: 3.0); // High res
+      ByteData? byteData = await image.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
+
+      if (byteData != null) {
+        final Uint8List pngBytes = byteData.buffer.asUint8List();
+
+        // 2. Save to temporary file
+        final tempDir = await getTemporaryDirectory();
+        final file = await File(
+          '${tempDir.path}/receipt_${widget.expense.id ?? "temp"}.png',
+        ).create();
+        await file.writeAsBytes(pngBytes);
+
+        // 3. Share the file
+        if (mounted) {
+          await Share.shareXFiles(
+            [XFile(file.path)],
+            text: 'Receipt from ${widget.expense.merchant}',
+            subject: 'Expense Receipt',
+          );
+        }
+      } else {
+        _shareTextFallback();
+      }
+    } catch (e) {
+      debugPrint("Error sharing image: $e");
+      _shareTextFallback();
+    }
+  }
+
+  void _shareTextFallback() {
+    final dateStr = DateFormat('MMM dd, yyyy').format(widget.expense.date);
     final amountStr = CurrencyUtils.formatAmount(
-      expense.amount,
-      expense.currency,
+      widget.expense.amount,
+      widget.expense.currency,
     );
 
     final StringBuffer sb = StringBuffer();
-    sb.writeln("🧾 Receipt from ${expense.merchant}");
+    sb.writeln("🧾 Receipt from ${widget.expense.merchant}");
     sb.writeln("Amount: $amountStr");
     sb.writeln("Date: $dateStr");
-    sb.writeln("Category: ${expense.category}");
-
-    if (expense.items != null && expense.items!.isNotEmpty) {
-      sb.writeln("\nItems:");
-      for (var item in expense.items!) {
-        final name = item['name'];
-        final price = item['total_price'];
-        sb.writeln(
-          "- $name: ${CurrencyUtils.formatAmount(price, expense.currency)}",
-        );
-      }
-    }
-
+    sb.writeln("Category: ${widget.expense.category}");
     Share.share(sb.toString());
   }
 
@@ -168,12 +211,11 @@ class ExpenseDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor, // Light background
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: theme.scaffoldBackgroundColor,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        // Custom back button to match the style
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: theme.colorScheme.onSurface),
           onPressed: () => Navigator.pop(context),
@@ -206,21 +248,19 @@ class ExpenseDetailScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 1. Receipt Image Placeholder
-            _buildReceiptPlaceholder(context),
+            // 1. Digital Receipt (Replaces Placeholder)
+            // Wrapped in RepaintBoundary for screenshot
+            RepaintBoundary(
+              key: _receiptKey,
+              child: DigitalReceiptWidget(expense: widget.expense),
+            ),
             const SizedBox(height: 24),
 
             // 2. Details Section
             _buildDetailsCard(context),
             const SizedBox(height: 24),
 
-            // 3. Receipt Breakdown Section (New)
-            if (expense.items != null && expense.items!.isNotEmpty) ...[
-              _buildBreakdownCard(context),
-              const SizedBox(height: 24),
-            ],
-
-            // 4. Actions Section
+            // 3. Actions Section
             _buildActionsCard(context),
             const SizedBox(height: 24),
           ],
@@ -229,75 +269,9 @@ class ExpenseDetailScreen extends StatelessWidget {
     );
   }
 
-  // Widget for the receipt placeholder
-  Widget _buildReceiptPlaceholder(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      height: 250,
-      decoration: BoxDecoration(
-        color: theme.brightness == Brightness.dark
-            ? theme.cardColor
-            : Colors.grey[200],
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Stack(
-        children: [
-          Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.receipt_long,
-                  color: theme.colorScheme.onSurfaceVariant,
-                  size: 60,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  expense.merchant,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Tap to view full size',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // App Watermark
-          Positioned(
-            bottom: 12,
-            right: 12,
-            child: Opacity(
-              opacity: 0.4,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.receipt_long,
-                    size: 16,
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    'AI Expense Logger',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // Removed _buildReceiptPlaceholder since we are using DigitalReceiptWidget directly
+
+  // ... keep _buildDetailsCard, _buildActionsCard etc. but update 'expense' references to 'widget.expense'
 
   // Widget for the main details card
   Widget _buildDetailsCard(BuildContext context) {
@@ -316,191 +290,61 @@ class ExpenseDetailScreen extends StatelessWidget {
       ),
       child: Column(
         children: [
-          _buildDetailRow(context, title: 'Merchant', value: expense.merchant),
+          _buildDetailRow(
+            context,
+            title: 'Merchant',
+            value: widget.expense.merchant,
+          ),
           _buildDetailRow(
             context,
             title: 'Amount',
-            value: CurrencyUtils.formatAmount(expense.amount, expense.currency),
+            value: CurrencyUtils.formatAmount(
+              widget.expense.amount,
+              widget.expense.currency,
+            ),
             isAmount: true,
           ),
           _buildDetailRow(
             context,
             title: 'Receipt Date',
-            value: (expense.date.hour != 0 || expense.date.minute != 0)
-                ? DateFormat('MMM dd, yyyy • h:mm a').format(expense.date)
-                : DateFormat('MMM dd, yyyy').format(expense.date),
+            value:
+                (widget.expense.date.hour != 0 ||
+                    widget.expense.date.minute != 0)
+                ? DateFormat(
+                    'MMM dd, yyyy • h:mm a',
+                  ).format(widget.expense.date)
+                : DateFormat('MMM dd, yyyy').format(widget.expense.date),
           ),
           _buildDetailRow(
             context,
             title: 'Added On',
             value: DateFormat(
               'MMM dd, yyyy • h:mm a',
-            ).format(expense.createdAt.toDate()),
+            ).format(widget.expense.createdAt.toDate()),
           ),
           _buildDetailRow(
             context,
             title: 'Category',
-            value: expense.category,
-            emoji: _getEmojiForExpense(expense),
+            value: widget.expense.category,
+            emoji: _getEmojiForExpense(widget.expense),
           ),
           _buildDetailRow(
             context,
             title: 'Payment',
             value: 'Credit Card', // Mock data
           ),
-          if (expense.invoiceNumber != null &&
-              expense.invoiceNumber!.isNotEmpty)
+          if (widget.expense.invoiceNumber != null &&
+              widget.expense.invoiceNumber!.isNotEmpty)
             _buildDetailRow(
               context,
               title: 'Invoice #',
-              value: expense.invoiceNumber!,
+              value: widget.expense.invoiceNumber!,
             ),
           _buildDetailRow(
             context,
             title: 'Notes',
-            value: expense.notes ?? 'No notes', // Handle null notes
+            value: widget.expense.notes ?? 'No notes', // Handle null notes
             isLast: true,
-          ),
-        ],
-      ),
-    );
-  }
-
-  // NEW: Breakdown Card
-  Widget _buildBreakdownCard(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "Receipt Breakdown",
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 16),
-          // Items
-          if (expense.items != null)
-            ...expense.items!.map((item) {
-              final quantity = (item['quantity'] as num?)?.toDouble() ?? 1.0;
-              final itemName = item['name'] ?? 'Item';
-              final displayName = quantity > 1.0
-                  ? '${quantity.toStringAsFixed(0)}x $itemName'
-                  : itemName;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        displayName,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurface,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      CurrencyUtils.formatAmount(
-                        (item['total_price'] as num?)?.toDouble() ?? 0.0,
-                        expense.currency,
-                      ),
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w500,
-                        color: theme.colorScheme.onSurface,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-
-          Divider(height: 24, color: theme.dividerColor.withOpacity(0.1)),
-
-          if (expense.subtotal != null && expense.subtotal! > 0)
-            _breakdownRow(context, "Subtotal", expense.subtotal!),
-          if (expense.discount != null && expense.discount! > 0)
-            _breakdownRow(
-              context,
-              "Discount",
-              -expense.discount!,
-              isDiscount: true,
-            ),
-          if (expense.tax != null && expense.tax! > 0)
-            _breakdownRow(context, "Tax", expense.tax!),
-          if (expense.tip != null && expense.tip! > 0)
-            _breakdownRow(context, "Tip", expense.tip!),
-
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                "Total",
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                CurrencyUtils.formatAmount(expense.amount, expense.currency),
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _breakdownRow(
-    BuildContext context,
-    String title,
-    double amount, {
-    bool isDiscount = false,
-  }) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Flexible(
-            child: Text(
-              title,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          Flexible(
-            child: Text(
-              CurrencyUtils.formatAmount(amount, expense.currency),
-              textAlign: TextAlign.end,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: isDiscount ? Colors.green : theme.colorScheme.onSurface,
-                fontWeight: FontWeight.w600,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
           ),
         ],
       ),

@@ -7,13 +7,17 @@ import 'package:fl_chart/fl_chart.dart';
 
 import 'package:ai_expense_logger/navigation/nav_manager.dart';
 import '../../services/export_service.dart';
+import '../../services/gemini_service.dart';
 import '../../utils/currency_utils.dart';
 import '../../widgets/data_picker_dialog.dart';
 import '../../widgets/export_bottom_sheet.dart';
 import '../../widgets/notification_bar.dart';
 import '../authentication/provider/auth_provider.dart';
+import '../expenses/expenses_view.dart';
 import 'all_categories_screen.dart';
 import 'category_progress_item.dart';
+import 'monthly_bar_chart.dart';
+import 'category_detail_card.dart'; // Correctly placed import
 
 class InsightsView extends StatefulWidget {
   const InsightsView({super.key});
@@ -23,8 +27,38 @@ class InsightsView extends StatefulWidget {
 }
 
 class _InsightsViewState extends State<InsightsView> {
+  // State for AI Insights
+  String? _aiAnalysis;
+  String? _aiTip;
+  int? _aiScore;
+  bool _isLoadingAI = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Fetch initial insights after build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fetchAIInsights();
+    });
+  }
+
+  // Trend Chart State
+  bool _showCumulative = false;
+  bool _showComparison = false;
+
   bool _isExporting = false;
   String _selectedCurrency = 'USD'; // Default currency
+
+  @override
+  void didUpdateWidget(covariant InsightsView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final provider = context.read<ExpenseProvider>();
+    // Refetch if the month changed
+    if (provider.selectedMonth !=
+        context.read<ExpenseProvider>().selectedMonth) {
+      _fetchAIInsights();
+    }
+  }
 
   Future<void> _selectMonth(
     BuildContext context,
@@ -39,6 +73,7 @@ class _InsightsViewState extends State<InsightsView> {
       final newMonth = DateTime(picked.year, picked.month);
       if (newMonth != provider.selectedMonth) {
         provider.updateSelectedMonth(newMonth);
+        _fetchAIInsights(); // Fetch new insights for new month
       }
     }
   }
@@ -95,196 +130,154 @@ class _InsightsViewState extends State<InsightsView> {
     }
   }
 
+  Future<void> _fetchAIInsights() async {
+    final provider = context.read<ExpenseProvider>();
+    final authProvider = context.read<AuthProvider>();
+
+    if (provider.expensesForSelectedMonth.isEmpty) {
+      setState(() {
+        _aiAnalysis = "No expenses recorded for this month yet.";
+        _aiTip = "Start tracking your spending to get AI-powered insights!";
+        _aiScore = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoadingAI = true;
+    });
+
+    try {
+      final budget = authProvider.userProfile?.budget ?? 5000.0;
+      final result = await GeminiService.generateSpendingInsights(
+        provider.expensesForSelectedMonth,
+        budget,
+        _selectedCurrency,
+      );
+
+      if (mounted) {
+        setState(() {
+          if (result != null) {
+            _aiAnalysis = result['analysis'];
+            _aiTip = result['tip'];
+            _aiScore = result['score'];
+          } else {
+            _aiAnalysis = "Could not generate insights at this time.";
+            _aiTip = "Please check your internet connection and try again.";
+            _aiScore = null;
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _aiAnalysis = "Error generating insights.";
+          _aiTip = "Please try again later.";
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingAI = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final expenseProvider = context.watch<ExpenseProvider>();
+    final authProvider = context.watch<AuthProvider>();
 
-    // 2. Consume both ExpenseProvider and AuthProvider
-    return Consumer2<ExpenseProvider, AuthProvider>(
-      builder: (context, expenseProvider, authProvider, child) {
-        final totalSpentByCurrency = expenseProvider.totalSpentByCurrency;
+    // Calculate total spent for the selected currency
+    final totalSpent =
+        expenseProvider.totalSpentByCurrency[_selectedCurrency] ?? 0.0;
 
-        // Build list of available currencies, ensuring USD is always present
-        final Set<String> availableCurrencies = {'USD'};
-        availableCurrencies.addAll(totalSpentByCurrency.keys);
-        final currencyList = availableCurrencies.toList()..sort();
-
-        // Ensure selected currency is valid
-        if (!availableCurrencies.contains(_selectedCurrency)) {
-          _selectedCurrency = 'USD';
-        }
-
-        final totalSpent = totalSpentByCurrency[_selectedCurrency] ?? 0.0;
-
-        return Scaffold(
-          backgroundColor: theme.scaffoldBackgroundColor,
-          appBar: AppBar(
-            backgroundColor: theme.primaryColor.withOpacity(0.05),
-            surfaceTintColor: Colors.transparent,
-            elevation: 0,
-            // 3. Simplified title since date picker is now in the card
-            title: Text(
-              'Insights',
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
+    return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      appBar: AppBar(
+        title: Text(
+          'Insights',
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        centerTitle: false,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        actions: [
+          // Currency Switcher if multiple currencies exist
+          if (expenseProvider.totalSpentByCurrency.keys.length > 1)
+            PopupMenuButton<String>(
+              icon: Icon(Icons.swap_horiz, color: theme.colorScheme.primary),
+              tooltip: "Switch Currency",
+              initialValue: _selectedCurrency,
+              onSelected: (String newValue) {
+                setState(() {
+                  _selectedCurrency = newValue;
+                  _fetchAIInsights();
+                });
+              },
+              itemBuilder: (BuildContext context) {
+                return expenseProvider.totalSpentByCurrency.keys.map((
+                  String choice,
+                ) {
+                  return PopupMenuItem<String>(
+                    value: choice,
+                    child: Text(choice),
+                  );
+                }).toList();
+              },
+            ),
+          IconButton(
+            icon: Icon(
+              Icons.ios_share_rounded,
+              color: theme.colorScheme.primary,
+            ),
+            onPressed: _showExportOptions,
+            tooltip: "Export Report",
+          ),
+        ],
+      ),
+      body: _isExporting
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 20),
+                  Text(
+                    "Generating Export...",
+                    style: theme.textTheme.bodyLarge,
+                  ),
+                ],
+              ),
+            )
+          : SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                children: [
+                  _buildAIAnalysisCard(
+                    context,
+                    expenseProvider,
+                    authProvider,
+                    _selectedCurrency,
+                    totalSpent,
+                  ),
+                  const SizedBox(height: 24),
+                  _buildCurrencyReportSection(
+                    context,
+                    expenseProvider,
+                    authProvider,
+                    _selectedCurrency,
+                    totalSpent,
+                  ),
+                  const SizedBox(height: 40),
+                ],
               ),
             ),
-            centerTitle: true,
-            actions: [
-              _isExporting
-                  ? Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                    )
-                  : IconButton(
-                      icon: Icon(
-                        Icons.download_outlined,
-                        color: theme.iconTheme.color,
-                      ),
-                      onPressed: _showExportOptions,
-                    ),
-            ],
-          ),
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // --- Currency Dropdown Selector ---
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: theme.cardColor,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: theme.dividerColor.withOpacity(0.2),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _selectedCurrency,
-                      isExpanded: true,
-                      borderRadius: BorderRadius.circular(14),
-                      icon: Icon(
-                        Icons.expand_more_rounded,
-                        color: theme.iconTheme.color?.withOpacity(0.5),
-                      ),
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                      dropdownColor: theme.cardColor,
-                      items: currencyList.map((String code) {
-                        final symbol = CurrencyUtils.getCurrencySymbol(code);
-                        return DropdownMenuItem<String>(
-                          value: code,
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 32,
-                                height: 32,
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      theme.colorScheme.primary.withOpacity(
-                                        0.15,
-                                      ),
-                                      theme.colorScheme.primary.withOpacity(
-                                        0.05,
-                                      ),
-                                    ],
-                                  ),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Text(
-                                  symbol,
-                                  style: TextStyle(
-                                    color: theme.colorScheme.primary,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 14),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    code,
-                                    style: theme.textTheme.bodyLarge?.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 15,
-                                    ),
-                                  ),
-                                  Text(
-                                    'Currency Report',
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: theme.colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (String? newValue) {
-                        if (newValue != null) {
-                          setState(() {
-                            _selectedCurrency = newValue;
-                          });
-                        }
-                      },
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                const SizedBox(height: 24),
-
-                // --- ⭐️ AI Smart Analysis Card ---
-                _buildAIAnalysisCard(
-                  context,
-                  expenseProvider,
-                  authProvider,
-                  _selectedCurrency,
-                  totalSpent,
-                ),
-
-                const SizedBox(height: 24),
-
-                // --- Selected Currency Report ---
-                _buildCurrencyReportSection(
-                  context,
-                  expenseProvider,
-                  authProvider, // Pass auth provider
-                  _selectedCurrency,
-                  totalSpent,
-                ),
-              ],
-            ),
-          ),
-        );
-      },
     );
   }
 
@@ -297,81 +290,146 @@ class _InsightsViewState extends State<InsightsView> {
     double totalSpent,
   ) {
     final theme = Theme.of(context);
-    final percentageChange = provider.getPercentageChange(currency);
-    final budget = authProvider.userProfile?.budget ?? 5000.0;
-    final isOverBudget = totalSpent > budget;
 
-    // Determine the message and icon based on data
-    String message = "Keep tracking your expenses to get smart insights!";
+    // Trigger fetch if we have data but no insights yet (and not loading)
+    if (_aiAnalysis == null &&
+        !_isLoadingAI &&
+        provider.expensesForSelectedMonth.isNotEmpty) {
+      // Debounce or simple check to avoid infinite loops handled by _isLoadingAI
+      // But better to trigger on significant changes. For now, manual refresh or init is safer.
+    }
+
+    // Default/Fallback Logic if AI fails or is loading
+    String message = _aiAnalysis ?? "Analyzing your spending habits...";
+    String tip = _aiTip ?? "Please wait while we crunch the numbers.";
     IconData icon = Icons.auto_awesome;
     Color color = theme.colorScheme.primary;
 
-    if (percentageChange != null) {
-      if (percentageChange > 0) {
-        message =
-            "You've spent ${percentageChange.abs().toStringAsFixed(1)}% more than last month. Check your 'Food' spending!";
+    if (_aiScore != null) {
+      if (_aiScore! >= 8) {
+        icon = Icons.star_rounded;
+        color = Colors.green;
+      } else if (_aiScore! >= 5) {
         icon = Icons.trending_up;
         color = Colors.orange;
       } else {
-        message =
-            "Great job! You've spent ${percentageChange.abs().toStringAsFixed(1)}% less than last month.";
-        icon = Icons.trending_down;
-        color = Colors.green;
+        icon = Icons.warning_amber_rounded;
+        color = Colors.red;
       }
     }
 
-    if (isOverBudget) {
-      message =
-          "Alert: You've exceeded your monthly budget. Try cutting back on non-essentials.";
-      icon = Icons.warning_amber_rounded;
-      color = Colors.red;
-    }
-
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [color.withOpacity(0.15), color.withOpacity(0.05)],
+          colors: [
+            theme.colorScheme.primary.withOpacity(0.05),
+            theme.cardColor,
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.3)),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: theme.colorScheme.primary.withOpacity(0.1)),
+        boxShadow: [
+          BoxShadow(
+            color: theme.shadowColor.withOpacity(0.05),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.2),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'AI Insight',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: color,
-                    fontWeight: FontWeight.bold,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: _isLoadingAI
+                        ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: color,
+                            ),
+                          )
+                        : Icon(icon, color: color, size: 20),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  message,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurface,
-                    height: 1.4,
+                  const SizedBox(width: 12),
+                  Text(
+                    'AI Financial Analyst',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.onSurface,
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
+              IconButton(
+                icon: const Icon(Icons.refresh, size: 20),
+                onPressed: _fetchAIInsights,
+                tooltip: "Refresh Insights",
+              ),
+            ],
           ),
+          const SizedBox(height: 16),
+          if (_isLoadingAI && _aiAnalysis == null)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Text(
+                "Gathering your transaction data...",
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            )
+          else ...[
+            Text(
+              message,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                height: 1.5,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.secondary.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.lightbulb_outline,
+                    size: 18,
+                    color: theme.colorScheme.secondary,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      tip,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurface.withOpacity(0.8),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -404,15 +462,18 @@ class _InsightsViewState extends State<InsightsView> {
           currency,
         ),
         const SizedBox(height: 24),
-        // 1. Trend Chart (Line Chart)
-        // 1. Trend Chart (Line Chart)
-        _buildTrendChartCard(context, expenseProvider, currency),
         const SizedBox(height: 24),
-        // 2. Pie Chart (Donut)
+        // 1. Trend Chart (Line Chart - Enhanced)
+        _buildAdvancedTrendChart(context, expenseProvider, currency),
+        const SizedBox(height: 24),
+        // 2. Monthly Bar Chart (New)
+        _buildMonthlyHistoryCard(context, expenseProvider, currency),
+        const SizedBox(height: 24),
+        // 3. Pie Chart (Donut)
         _buildPieChartCard(context, expenseProvider, currency, totalSpent),
         const SizedBox(height: 24),
-        // 3. Category List (Circular Progress)
-        _buildCategoryListCard(context, sortedCategories, totalSpent, currency),
+        // 4. Category List (New Separate Cards)
+        _buildDetailedCategoryList(context, expenseProvider, currency),
         const SizedBox(height: 24),
         _buildTopMerchantsCard(context, expenseProvider, currency),
         const SizedBox(height: 24),
@@ -610,25 +671,48 @@ class _InsightsViewState extends State<InsightsView> {
     );
   }
 
-  Widget _buildTrendChartCard(
+  // --- ADVANCED TREND CHART ---
+  Widget _buildAdvancedTrendChart(
     BuildContext context,
     ExpenseProvider provider,
     String currency,
   ) {
     final theme = Theme.of(context);
-    final spots = provider.getDailyTrendPoints(currency);
-    final gradientColors = [
-      theme.colorScheme.primary.withOpacity(0.3),
-      theme.colorScheme.primary.withOpacity(0.0),
-    ];
+
+    // Get Data based on toggles
+    final dailySpots = provider.getDailyTrendPoints(currency);
+    final cumulativeSpots = provider.getCumulativeTrendPoints(currency);
+    final comparisonSpots = provider.getLastMonthTrendPoints(currency);
+
+    final currentSpots = _showCumulative ? cumulativeSpots : dailySpots;
+
+    // Gradient Setup
     final lineGradient = LinearGradient(
-      colors: [theme.colorScheme.primary, theme.colorScheme.tertiary],
+      colors: [
+        theme.colorScheme.primary,
+        const Color(0xFF5856D6),
+      ], // Blue to Purple
+    );
+    final areaGradient = LinearGradient(
+      colors: [
+        theme.colorScheme.primary.withOpacity(0.3),
+        theme.colorScheme.primary.withOpacity(0.0),
+      ],
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
     );
 
-    // Calculate nice max Y for padding
+    // Max Y Calc
     double maxY = 0;
-    if (spots.isNotEmpty) {
-      maxY = spots.map((e) => e.y).reduce((a, b) => a > b ? a : b);
+    if (currentSpots.isNotEmpty) {
+      maxY = currentSpots.map((e) => e.y).reduce((a, b) => a > b ? a : b);
+    }
+    // Check comparison max Y if showing
+    if (_showComparison && !_showCumulative && comparisonSpots.isNotEmpty) {
+      final compMax = comparisonSpots
+          .map((e) => e.y)
+          .reduce((a, b) => a > b ? a : b);
+      if (compMax > maxY) maxY = compMax;
     }
     final double yInterval = maxY > 0 ? maxY / 5 : 10;
 
@@ -648,6 +732,7 @@ class _InsightsViewState extends State<InsightsView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header Row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -657,30 +742,58 @@ class _InsightsViewState extends State<InsightsView> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  'Daily',
-                  style: TextStyle(
-                    color: theme.colorScheme.primary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+              // Toggles
+              Row(
+                children: [
+                  // Cumulative Toggle
+                  IconButton(
+                    icon: Icon(
+                      _showCumulative ? Icons.show_chart : Icons.bar_chart,
+                      color: _showCumulative
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onSurfaceVariant,
+                    ),
+                    onPressed: () => setState(() {
+                      _showCumulative = !_showCumulative;
+                      // Comparison only makes sense for daily view usually, or pure cumulative comparison
+                      // Let's keep comparison active for now
+                    }),
+                    tooltip: _showCumulative
+                        ? "Switch to Daily View"
+                        : "Switch to Cumulative View",
                   ),
-                ),
+                  // Comparison Toggle
+                  IconButton(
+                    icon: Icon(
+                      Icons.compare_arrows,
+                      color: _showComparison
+                          ? theme.colorScheme.secondary
+                          : theme.colorScheme.onSurfaceVariant,
+                    ),
+                    onPressed: () =>
+                        setState(() => _showComparison = !_showComparison),
+                    tooltip: "Toggle Last Month Comparison",
+                  ),
+                ],
               ),
             ],
           ),
+
+          Text(
+            _showCumulative ? "Cumulative Growth" : "Daily Activity",
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+
           const SizedBox(height: 32),
+
           SizedBox(
             height: 240,
-            child: spots.isEmpty
+            child: currentSpots.isEmpty
                 ? Center(
                     child: Text(
-                      'No data available',
+                      'No data',
                       style: TextStyle(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
@@ -691,16 +804,12 @@ class _InsightsViewState extends State<InsightsView> {
                       gridData: FlGridData(
                         show: true,
                         drawVerticalLine: false,
-                        horizontalInterval: yInterval > 0 ? yInterval : 100,
-                        getDrawingHorizontalLine: (value) {
-                          return FlLine(
-                            color: theme.dividerColor.withOpacity(
-                              0.05,
-                            ), // Fainter grid
-                            strokeWidth: 1,
-                            dashArray: [5, 5],
-                          );
-                        },
+                        horizontalInterval: yInterval > 0 ? yInterval : 10,
+                        getDrawingHorizontalLine: (value) => FlLine(
+                          color: theme.dividerColor.withOpacity(0.05),
+                          strokeWidth: 1,
+                          dashArray: [5, 5],
+                        ),
                       ),
                       titlesData: FlTitlesData(
                         show: true,
@@ -710,13 +819,16 @@ class _InsightsViewState extends State<InsightsView> {
                         topTitles: const AxisTitles(
                           sideTitles: SideTitles(showTitles: false),
                         ),
+                        leftTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false),
+                        ),
                         bottomTitles: AxisTitles(
                           sideTitles: SideTitles(
                             showTitles: true,
                             reservedSize: 32,
                             interval: 5,
                             getTitlesWidget: (value, meta) {
-                              if (value == 0 || value > 31)
+                              if (value < 1 || value > 31)
                                 return const SizedBox.shrink();
                               return Padding(
                                 padding: const EdgeInsets.only(top: 10.0),
@@ -732,40 +844,45 @@ class _InsightsViewState extends State<InsightsView> {
                             },
                           ),
                         ),
-                        leftTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: false,
-                          ), // Clean look, hide Y axis labels labels or keep minimal
-                        ),
                       ),
                       borderData: FlBorderData(show: false),
                       minX: 1,
-                      maxX: spots.isNotEmpty ? spots.last.x : 31,
+                      maxX: 31,
                       minY: 0,
-                      maxY: maxY * 1.2, // Add 20% top padding
+                      maxY: maxY * 1.2,
                       lineBarsData: [
+                        // Comparison Line (Last Month)
+                        if (_showComparison &&
+                            !_showCumulative &&
+                            comparisonSpots.isNotEmpty)
+                          LineChartBarData(
+                            spots: comparisonSpots,
+                            isCurved: true,
+                            curveSmoothness: 0.35,
+                            color: theme.colorScheme.secondary.withOpacity(0.3),
+                            barWidth: 2,
+                            isStrokeCapRound: true,
+                            dotData: const FlDotData(show: false),
+                            dashArray: [5, 5],
+                          ),
+
+                        // Current Line
                         LineChartBarData(
-                          spots: spots,
+                          spots: currentSpots,
                           isCurved: true,
-                          curveSmoothness: 0.35,
-                          // color: theme.colorScheme.primary,
-                          gradient: lineGradient, // Gradient Line
-                          barWidth: 4, // Thicker line
+                          curveSmoothness: _showCumulative ? 0.2 : 0.35,
+                          gradient: lineGradient,
+                          barWidth: 4,
                           isStrokeCapRound: true,
                           dotData: FlDotData(
-                            show: true,
-                            checkToShowDot: (spot, barData) {
-                              return spot.y ==
-                                  maxY; // Only show dot for max peak
-                            },
+                            show: _showCumulative
+                                ? false
+                                : true, // Show dots on peaks for daily
+                            checkToShowDot: (spot, barData) => spot.y == maxY,
                           ),
                           belowBarData: BarAreaData(
                             show: true,
-                            gradient: LinearGradient(
-                              colors: gradientColors,
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                            ),
+                            gradient: areaGradient,
                           ),
                         ),
                       ],
@@ -774,51 +891,155 @@ class _InsightsViewState extends State<InsightsView> {
                           getTooltipColor: (_) =>
                               theme.colorScheme.surfaceVariant,
                           tooltipRoundedRadius: 8,
-                          tooltipPadding: const EdgeInsets.all(8),
                           getTooltipItems: (touchedSpots) {
                             return touchedSpots.map((spot) {
+                              final isComp =
+                                  spot.barIndex == 0 &&
+                                  _showComparison &&
+                                  !_showCumulative &&
+                                  comparisonSpots
+                                      .isNotEmpty; // Assuming comp is first if present
                               return LineTooltipItem(
                                 '${CurrencyUtils.getCurrencySymbol(currency)}${spot.y.toStringAsFixed(0)}',
                                 TextStyle(
-                                  color: theme.colorScheme.onSurfaceVariant,
+                                  color: isComp
+                                      ? theme.colorScheme.secondary
+                                      : theme.colorScheme.primary,
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 12,
                                 ),
                               );
                             }).toList();
                           },
                         ),
-                        getTouchedSpotIndicator:
-                            (LineChartBarData barData, List<int> spotIndexes) {
-                              return spotIndexes.map((spotIndex) {
-                                return TouchedSpotIndicatorData(
-                                  FlLine(
-                                    color: theme.colorScheme.primary
-                                        .withOpacity(0.5),
-                                    strokeWidth: 2,
-                                    dashArray: [5, 5],
-                                  ),
-                                  FlDotData(
-                                    getDotPainter:
-                                        (spot, percent, barData, index) {
-                                          return FlDotCirclePainter(
-                                            radius: 6,
-                                            color: theme.colorScheme.surface,
-                                            strokeWidth: 3,
-                                            strokeColor:
-                                                theme.colorScheme.primary,
-                                          );
-                                        },
-                                  ),
-                                );
-                              }).toList();
-                            },
                       ),
                     ),
                   ),
           ),
+
+          // Legend
+          if (_showComparison)
+            Padding(
+              padding: const EdgeInsets.only(top: 16.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _buildLegendItem(
+                    context,
+                    "Current",
+                    theme.colorScheme.primary,
+                  ),
+                  const SizedBox(width: 16),
+                  _buildLegendItem(
+                    context,
+                    "Last Month",
+                    theme.colorScheme.secondary.withOpacity(0.5),
+                    isDashed: true,
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
+    );
+  }
+
+  Widget _buildLegendItem(
+    BuildContext context,
+    String label,
+    Color color, {
+    bool isDashed = false,
+  }) {
+    return Row(
+      children: [
+        Container(
+          width: 12,
+          height: 2,
+          decoration: BoxDecoration(
+            color: color,
+            // Simple dash simulation not easy here without custom painter, line is enough
+          ),
+        ),
+        const SizedBox(width: 4),
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
+      ],
+    );
+  }
+
+  // --- MONTHLY HISTORY CARD ---
+  Widget _buildMonthlyHistoryCard(
+    BuildContext context,
+    ExpenseProvider provider,
+    String currency,
+  ) {
+    final theme = Theme.of(context);
+    final monthlyData = provider.getSixMonthTrend(currency);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Monthly History',
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 16),
+        MonthlyBarChart(monthlyData: monthlyData, currency: currency),
+      ],
+    );
+  }
+
+  Widget _buildDetailedCategoryList(
+    BuildContext context,
+    ExpenseProvider provider,
+    String currency,
+  ) {
+    final theme = Theme.of(context);
+    final stats = provider.getCategoryDetails(currency);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Categories',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            TextButton(
+              onPressed: () => NavigationManager.push(
+                context,
+                AllCategoriesScreen(currency: currency),
+              ),
+              child: const Text("View All"),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ...stats
+            .take(5)
+            .map((stat) => CategoryDetailCard(stat: stat, currency: currency)),
+      ],
+    );
+  }
+
+  Widget _buildCatStatItem(BuildContext context, IconData icon, String text) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: theme.colorScheme.onSurfaceVariant),
+        const SizedBox(width: 4),
+        Text(
+          text,
+          style: TextStyle(
+            fontSize: 12,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
     );
   }
 
@@ -904,107 +1125,6 @@ class _InsightsViewState extends State<InsightsView> {
                   ],
                 ),
               ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCategoryListCard(
-    BuildContext context,
-    List<MapEntry<String, double>> sortedCategories,
-    double totalSpent,
-    String currency,
-  ) {
-    final theme = Theme.of(context);
-    // We recycle colors for the progress bars
-    final colors = [
-      Colors.blue[600]!,
-      Colors.green[600]!,
-      Colors.purple[600]!,
-      Colors.orange[600]!,
-      Colors.red[600]!,
-    ];
-
-    return Container(
-      padding: const EdgeInsets.all(20.0),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(24.0),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Categories',
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 20),
-          if (sortedCategories.isEmpty)
-            Center(
-              child: Text(
-                'No categories yet',
-                style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
-              ),
-            ),
-
-          ...sortedCategories.take(5).toList().asMap().entries.map((entry) {
-            final index = entry.key;
-            final category = entry.value.key;
-            final amount = entry.value.value;
-            final percentage = totalSpent > 0 ? amount / totalSpent : 0.0;
-            return CategoryProgressItem(
-              icon: Icons
-                  .category, // Not used in new design but required constant
-              title: category,
-              amount: amount,
-              percentage: percentage,
-              color: colors[index % colors.length],
-              currency: currency,
-            );
-          }),
-
-          const SizedBox(height: 12),
-          Center(
-            child: TextButton(
-              onPressed: () {
-                NavigationManager.push(
-                  context,
-                  AllCategoriesScreen(
-                    sortedCategories: sortedCategories,
-                    totalSpent: totalSpent,
-                  ),
-                  type: TransitionType.platform,
-                );
-              },
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'View All Categories',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: theme.colorScheme.primary,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    Icons.arrow_forward_rounded,
-                    size: 16,
-                    color: theme.colorScheme.primary,
-                  ),
-                ],
-              ),
             ),
           ),
         ],
